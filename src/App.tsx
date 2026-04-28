@@ -4,8 +4,7 @@
  */
 
 import { AnimatePresence, motion } from 'motion/react';
-import React, { useEffect, useState } from 'react';
-import ReactPlayer from 'react-player';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Heart,
   MapPin,
@@ -28,10 +27,74 @@ const FloralBorder = ({ className = '', flip = false, src }: { className?: strin
   />
 );
 
+type RevealDirection = 'up' | 'left' | 'right' | 'none';
+const Reveal = ({ children, className = '', delay = 0, direction = 'up' }: { children: React.ReactNode; className?: string; delay?: number; direction?: RevealDirection }) => {
+  const initial =
+    direction === 'up'    ? { opacity: 0, y: 36 } :
+    direction === 'left'  ? { opacity: 0, x: -36 } :
+    direction === 'right' ? { opacity: 0, x: 36 } :
+                            { opacity: 0 };
+  const animate = direction === 'up' ? { opacity: 1, y: 0 } :
+                  direction === 'left' || direction === 'right' ? { opacity: 1, x: 0 } :
+                  { opacity: 1 };
+  return (
+    <motion.div
+      className={className}
+      initial={initial}
+      whileInView={animate}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1], delay }}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
 function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeReady = useRef(false);
+  const pendingPlay = useRef(false);
+
+  const sendYTCommand = useCallback((cmd: string, args: any[] = []) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func: cmd, args }),
+      '*'
+    );
+  }, []);
+
+  // Listen for YouTube player ready event
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.event === 'onReady' || data?.info !== undefined) {
+          iframeReady.current = true;
+          if (pendingPlay.current) {
+            pendingPlay.current = false;
+            sendYTCommand('unMute');
+            sendYTCommand('setVolume', [100]);
+          }
+        }
+      } catch {}
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [sendYTCommand]);
+
+  const getYouTubeVideoId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)([^&\s?#]+)/,
+      /youtube\.com\/embed\/([^&\s?#]+)/,
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  };
   const [guestName, setGuestName] = useState<string | null>(null);
   const [content, setContent] = useState<any>(null);
 
@@ -88,30 +151,67 @@ function App() {
 
   if (!content) return null;
 
+  let heroDateText = content.date || '';
+  let uiMonth = 'Diciembre';
+  let uiDayName = 'Sábado';
+  let uiDay = '06';
+  let uiYear = '2026';
+  let uiTime = '17:00 hrs.';
+
+  if (content.targetDate) {
+    const [datePart, timePart] = content.targetDate.split('T');
+    const [yy, mm, dd] = datePart.split('-');
+    
+    heroDateText = `${dd}.${mm}.${yy}`;
+
+    const dateObj = new Date(Date.UTC(parseInt(yy), parseInt(mm) - 1, parseInt(dd)));
+    
+    const monthStr = dateObj.toLocaleDateString('fr-FR', { month: 'long', timeZone: 'UTC' });
+    uiMonth = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
+    
+    const dayStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', timeZone: 'UTC' });
+    uiDayName = dayStr.charAt(0).toUpperCase() + dayStr.slice(1);
+    
+    uiDay = dd;
+    uiYear = yy;
+    
+    if (timePart) {
+      uiTime = `${timePart} hrs.`;
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-neutral-100 flex items-start sm:items-center justify-center p-0 sm:p-8">
-      <div className="w-full max-w-md bg-paper h-screen sm:h-[850px] sm:max-h-[90vh] sm:rounded-xl shadow-2xl overflow-x-hidden overflow-y-auto relative scroll-smooth flex flex-col">
+    <div className="min-h-screen w-full bg-neutral-100 flex sm:items-center justify-center p-0 sm:p-4 md:p-8">
+      <div className="w-full max-w-[100vw] sm:max-w-md md:max-w-lg lg:max-w-xl bg-paper min-h-[100dvh] sm:min-h-[850px] sm:max-h-[90vh] sm:rounded-2xl shadow-2xl overflow-x-hidden relative scroll-smooth flex flex-col text-neutral-800">
         {/* Hero Section */}
         <motion.div 
           className="relative w-full bg-burgundy flex flex-col items-center justify-center cursor-pointer shrink-0 z-50 overflow-hidden"
-          animate={{ minHeight: isOpen ? '70vh' : '100%' }}
+          animate={{ minHeight: isOpen ? '70vh' : '100dvh' }}
           transition={{ duration: 1.5, ease: 'easeInOut' }}
           onClick={() => {
             if (!isOpening && !isOpen) {
               setIsOpening(true);
               setIsPlaying(true);
+              // Unmute the already-playing (muted) video — no user gesture needed for this
+              if (iframeReady.current) {
+                sendYTCommand('unMute');
+                sendYTCommand('setVolume', [100]);
+              } else {
+                // iframe not ready yet — set flag so onMessage handler will unmute when ready
+                pendingPlay.current = true;
+              }
               setTimeout(() => setIsOpen(true), 8500);
             }
           }}
         >
-          <div className="text-center text-white mb-12">
-            <h1 className="font-cursive text-8xl mb-2 leading-none">{content.groomName}</h1>
-            <p className="font-serif text-3xl italic mb-2">&</p>
-            <h1 className="font-cursive text-8xl leading-none">{content.brideName}</h1>
+          <div className="text-center text-white mb-12 px-4">
+            <h1 className="font-cursive text-6xl sm:text-8xl mb-2 leading-none">{content.groomName}</h1>
+            <p className="font-serif text-2xl sm:text-3xl italic mb-2">&</p>
+            <h1 className="font-cursive text-6xl sm:text-8xl leading-none">{content.brideName}</h1>
           </div>
           
           <motion.div 
-            className="relative w-72 h-48 mt-12"
+            className="relative w-60 h-40 sm:w-72 sm:h-48 mt-12"
             style={{ perspective: '1200px' }}
             whileHover={!isOpening && !isOpen ? { scale: 1.05 } : {}}
             animate={!isOpening && !isOpen ? { y: [0, -10, 0] } : { y: 0 }}
@@ -132,13 +232,13 @@ function App() {
               transition={{ duration: 4.0, ease: [0.16, 1, 0.3, 1], delay: 1.5 }}
             >
                {guestName && (
-                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Para:<br/>{guestName}</p>
+                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Pour :<br/>{guestName}</p>
                )}
                {!guestName && (
-                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Nuestra<br/>Boda</p>
+                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Notre<br/>Mariage</p>
                )}
                {(!isOpening && !isOpen) && (
-                 <p className="font-serif text-burgundy opacity-50 text-sm mt-4">Abrir invitación</p>
+                 <p className="font-serif text-burgundy opacity-50 text-sm mt-4">Ouvrir l'invitation</p>
                )}
             </motion.div>
 
@@ -146,8 +246,8 @@ function App() {
             {isOpening && (
               <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 6 }}>
                 {[
-                  { id: 1, content: `¡Hola ${guestName ? guestName.split(' ')[0] : 'Invitado'}!`, endX: -70, endY: -220, rotate: -15, delay: 2.5 },
-                  { id: 2, content: `¡Acompáñanos a celebrar!`, endX: 80, endY: -160, rotate: 10, delay: 4.0 },
+                  { id: 1, content: `Bonjour ${guestName ? guestName.split(' ')[0] : 'Invité'} !`, endX: -70, endY: -220, rotate: -15, delay: 2.5 },
+                  { id: 2, content: `Rejoignez-nous pour célébrer !`, endX: 80, endY: -160, rotate: 10, delay: 4.0 },
                 ].map((msg) => (
                   <motion.div
                     key={msg.id}
@@ -195,7 +295,7 @@ function App() {
                    alt="Red Car Keepsake"
                    className="w-28 h-28 object-cover sepia-[.3]"
                  />
-                 <span className="font-cursive text-2xl text-burgundy/80 mt-2">Recuerdos</span>
+                 <span className="font-cursive text-xl sm:text-2xl text-burgundy/80 mt-2">Souvenirs</span>
               </motion.div>
             )}
 
@@ -235,9 +335,24 @@ function App() {
           </motion.div>
           
           <div className="mt-16 text-white/80 font-sans tracking-widest text-sm">
-            {content.date}
+            {heroDateText}
           </div>
         </motion.div>
+
+        {/* Hidden YouTube iframe — must stay outside isOpen guard so it exists on first click */}
+        {content?.musicUrl && (() => {
+          const videoId = getYouTubeVideoId(content.musicUrl);
+          if (!videoId) return null;
+          return (
+            <iframe
+              ref={iframeRef}
+              className="absolute w-0 h-0 pointer-events-none"
+              src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=1`}
+              allow="autoplay"
+              title="background-music"
+            />
+          );
+        })()}
 
         {/* Content Section */}
         {isOpen && (
@@ -251,103 +366,113 @@ function App() {
             <FloralBorder src={content.floralImage} />
           
           <div className="px-8 text-center mt-6">
-            <p className="font-serif italic text-burgundy text-lg leading-relaxed mb-6">
-              "Y sobre todas estas cosas, vístanse<br/>
-              de amor, que es el vínculo perfecto."<br/>
-              <span className="text-sm font-sans block mt-2">Colosenses 3:14</span>
-            </p>
+            <Reveal delay={0.1}>
+              <p className="font-serif italic text-burgundy text-lg leading-relaxed mb-6">
+                "{content.bibleVerse}"<br/>
+                <span className="text-sm font-sans block mt-2">{content.bibleVerseRef}</span>
+              </p>
+            </Reveal>
             
-            <div className="flex items-center justify-center gap-4 my-8">
-              <span className="font-serif text-5xl text-burgundy">{content.groomName ? content.groomName[0] : 'M'}</span>
-              <div className="w-[1px] h-12 bg-burgundy"></div>
-              <span className="font-serif text-5xl text-burgundy">{content.brideName ? content.brideName[0] : 'M'}</span>
-            </div>
+            <Reveal delay={0.2}>
+              <div className="flex items-center justify-center gap-4 my-8">
+                <span className="font-serif text-5xl text-burgundy">{content.groomName ? content.groomName[0] : 'M'}</span>
+                <div className="w-[1px] h-12 bg-burgundy"></div>
+                <span className="font-serif text-5xl text-burgundy">{content.brideName ? content.brideName[0] : 'M'}</span>
+              </div>
+            </Reveal>
             
-            <h2 className="font-sans tracking-[0.2em] text-sm text-burgundy/80 font-medium mb-12">
-              ¡NOS CASAMOS!
-            </h2>
+            <Reveal delay={0.1}>
+              <h2 className="font-sans tracking-[0.2em] text-sm text-burgundy/80 font-medium mb-12">
+                NOUS NOUS MARIONS !
+              </h2>
+            </Reveal>
             
-            <img 
-              src={content.huggingImage} 
-              alt="Couple hugging" 
-              className="w-full aspect-[4/5] object-cover bg-neutral-200"
-            />
+            <Reveal direction="none" delay={0}>
+              <motion.img
+                src={content.huggingImage}
+                alt="Couple hugging"
+                className="w-full aspect-[4/5] object-cover bg-neutral-200"
+                initial={{ opacity: 0, scale: 1.04 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </Reveal>
           </div>
 
           <FloralBorder className="mt-8 opacity-60" flip src={content.floralImage} />
 
           {/* Music and Parents Section */}
           <div className="bg-burgundy w-full py-16 text-white text-center flex flex-col items-center relative">
-            <div className="absolute opacity-0 pointer-events-none">
-              <ReactPlayer 
-                url="https://youtu.be/VT0uftcDICg" 
-                playing={isPlaying} 
-                loop={true} 
-                width="1px" 
-                height="1px" 
-                volume={1}
-                playsinline={true}
-              />
-            </div>
-            <p className="font-serif italic text-lg mb-6">Dale play a nuestra canción</p>
+            <Reveal><p className="font-serif italic text-lg mb-6">Écoutez notre chanson</p></Reveal>
             
-            <div className="flex items-center justify-center gap-6 mb-16">
+            <Reveal delay={0.1}><div className="flex items-center justify-center gap-6 mb-16">
               <Shuffle className="w-4 h-4 opacity-70 cursor-pointer" />
               <SkipBack className="w-5 h-5 cursor-pointer" />
               <button 
                 className="w-12 h-12 rounded-full border border-white flex items-center justify-center hover:bg-white/10 transition-colors"
-                onClick={() => setIsPlaying(!isPlaying)}
+                onClick={() => {
+                  if (isPlaying) {
+                    sendYTCommand('pauseVideo');
+                  } else {
+                    sendYTCommand('playVideo');
+                    sendYTCommand('unMute');
+                    sendYTCommand('setVolume', [100]);
+                  }
+                  setIsPlaying(prev => !prev);
+                }}
               >
                 {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
               </button>
               <SkipForward className="w-5 h-5 cursor-pointer" />
               <Repeat className="w-4 h-4 opacity-70 cursor-pointer" />
-            </div>
+            </div></Reveal>
 
-            <p className="font-serif text-lg leading-relaxed px-8 mb-10">
-              Con el amor que nos une, la bendición<br/>
-              de Dios y el apoyo de nuestros padres:
-            </p>
+            <Reveal delay={0.1}><p className="font-serif text-lg leading-relaxed px-8 mb-10">
+              Avec l'amour qui nous unit, la bénédiction<br/>
+              de Dieu et le soutien de nos parents :
+            </p></Reveal>
 
-            <div className="font-serif italic text-white/90 space-y-6">
+            <Reveal delay={0.2}><div className="font-serif italic text-white/90 space-y-6">
               <div>
-                <p>Paola Mendez Sanchez</p>
-                <p>Oliver Perez Gutierrez</p>
+                <p>{content.groomMother}</p>
+                <p>{content.groomFather}</p>
               </div>
               <p className="text-xl">&</p>
               <div>
-                <p>Monica Lopez Flores</p>
-                <p>Gustavo Delgado Angus</p>
+                <p>{content.brideMother}</p>
+                <p>{content.brideFather}</p>
               </div>
-            </div>
+            </div></Reveal>
 
-            <p className="font-sans text-xs uppercase tracking-widest mt-12 px-8 leading-loose opacity-80">
-              Uniremos nuestras vidas en el<br/>
-              sacramento del matrimonio
-            </p>
+            <Reveal delay={0.1}><p className="font-sans text-xs uppercase tracking-widest mt-12 px-8 leading-loose opacity-80">
+              Nous unirons nos vies par le<br/>
+              sacrement du mariage
+            </p></Reveal>
           </div>
 
           {/* Countdown Section */}
+          <Reveal direction="none" className="w-full">
           <div className="bg-[#4a1c22] w-full py-12 text-white border-b border-white/10">
             <div className="flex flex-col items-center text-center">
-              <p className="font-sans tracking-widest text-xs uppercase mb-4 opacity-80">Diciembre</p>
-              <div className="flex items-center justify-center gap-6 w-full px-12 mb-10">
-                <span className="font-sans text-xs uppercase tracking-wider w-1/4 text-right">Sábado</span>
-                <span className="font-serif text-6xl italic border-y border-white/20 py-2 w-1/2">06</span>
-                <span className="font-sans text-xs tracking-wider w-1/4 text-left">2026</span>
+              <p className="font-sans tracking-widest text-xs uppercase mb-4 opacity-80">{uiMonth}</p>
+              <div className="flex items-center justify-center gap-4 sm:gap-6 w-full px-6 sm:px-12 mb-10">
+                <span className="font-sans text-xs uppercase tracking-wider w-1/4 text-right">{uiDayName}</span>
+                <span className="font-serif text-5xl sm:text-6xl italic border-y border-white/20 py-2 w-1/2">{uiDay}</span>
+                <span className="font-sans text-xs tracking-wider w-1/4 text-left">{uiYear}</span>
               </div>
               
-              <p className="font-sans tracking-widest text-xs uppercase mb-6">Faltan</p>
+              <p className="font-sans tracking-widest text-xs uppercase mb-6">Il reste</p>
               
-              <div className="flex justify-center gap-6 font-serif text-4xl mb-2">
+              <div className="flex justify-center gap-3 sm:gap-6 font-serif text-3xl sm:text-4xl mb-2">
                 <div className="flex flex-col items-center">
                   <span>{String(timeLeft.days).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Días</span>
+                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Jours</span>
                 </div>
                 <span>:</span>
                 <div className="flex flex-col items-center">
                   <span>{String(timeLeft.hours).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Horas</span>
+                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Heures</span>
                 </div>
                 <span>:</span>
                 <div className="flex flex-col items-center">
@@ -357,50 +482,63 @@ function App() {
                 <span>:</span>
                 <div className="flex flex-col items-center">
                   <span>{String(timeLeft.seconds).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Seg</span>
+                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Sec</span>
                 </div>
               </div>
             </div>
           </div>
+          </Reveal>
 
           <FloralBorder src={content.floralImage} />
 
           {/* Location & Itinerary */}
           <div className="w-full px-8 flex flex-col items-center mt-8">
-            <img 
-              src={content.outdoorImage} 
-              alt="Couple outdoor walking" 
-              className="w-full aspect-[4/5] object-cover mb-16"
-            />
+            <Reveal direction="none">
+              <motion.img
+                src={content.outdoorImage}
+                alt="Couple outdoor walking"
+                className="w-full aspect-[4/5] object-cover mb-16"
+                initial={{ opacity: 0, scale: 1.04 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </Reveal>
 
-            <div className="flex flex-col items-center text-center text-burgundy mb-16">
+            <Reveal><div className="flex flex-col items-center text-center text-burgundy mb-16">
               <MapPin className="w-10 h-10 stroke-1 mb-4 opacity-80" />
-              <p className="font-serif text-xl mb-2">17:00 hrs.</p>
-              <h3 className="font-sans font-medium tracking-[0.2em] mb-1">RECEPCIÓN</h3>
-              <p className="font-serif text-xl border-b border-burgundy/30 pb-1 mb-2">SALÓN VENDIMIA</p>
-              <p className="font-sans text-sm opacity-80 mb-6">Santa Cruz de la Sierra</p>
+              <p className="font-serif text-xl mb-2">{uiTime}</p>
+              <h3 className="font-sans font-medium tracking-[0.2em] mb-1">RÉCEPTION</h3>
+              <p className="font-serif text-xl border-b border-burgundy/30 pb-1 mb-2">{content.venueName}</p>
+              <p className="font-sans text-sm opacity-80 mb-6">{content.venueCity}</p>
               
-              <button className="bg-burgundy text-white font-sans text-sm tracking-wider px-8 py-3 rounded-full hover:bg-[#4a1c22] transition-colors">
-                Ver ubicación
-              </button>
-            </div>
+              <a 
+                href={`https://www.google.com/maps/search/?api=1&query=${content.mapCoordinates || '-17.781617,-63.179379'}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-burgundy text-white font-sans text-sm tracking-wider px-8 py-3 rounded-full hover:bg-[#4a1c22] transition-colors"
+              >
+                Voir l'emplacement
+              </a>
+            </div></Reveal>
 
-            <h3 className="font-sans font-medium tracking-[0.1em] text-burgundy text-sm mb-16">ITINERARIO DE ACTIVIDADES</h3>
+            <Reveal><h3 className="font-sans font-medium tracking-[0.1em] text-burgundy text-sm mb-16">ITINÉRAIRE DES ACTIVITÉS</h3></Reveal>
             
             <div className="relative w-full max-w-[280px] mb-16">
               {/* Center Line */}
               <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-burgundy/30 -translate-x-1/2"></div>
               
               {[
-                { time: '14:30', name: 'CEREMONIA', right: true, icon: <svg className="w-6 h-6 fill-burgundy bg-paper p-1" viewBox="0 0 24 24"><path d="M11 2v4H8v2h3v14h2V8h3V6h-3V2h-2z"/></svg> },
-                { time: '16:30', name: 'RECEPCIÓN', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-1" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> },
-                { time: '17:30', name: 'BRINDIS', right: true, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.5 3a2.5 2.5 0 0 0-5 0V8c0 1.5 1.5 3 2.5 3s2.5-1.5 2.5-3V3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M13 11v8"/><path strokeLinecap="round" strokeLinejoin="round" d="M10 19h6"/><path strokeLinecap="round" strokeLinejoin="round" d="M6 3v2"/></svg> },
-                { time: '18:00', name: 'BANQUETE', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg> },
-                { time: '19:30', name: 'FIESTA', right: true, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
-                { time: '21:00', name: 'HORA LOCA', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg> },
+                { time: '14:30', name: 'CÉRÉMONIE', right: true, icon: <svg className="w-6 h-6 fill-burgundy bg-paper p-1" viewBox="0 0 24 24"><path d="M11 2v4H8v2h3v14h2V8h3V6h-3V2h-2z"/></svg> },
+                { time: '16:30', name: 'RÉCEPTION', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-1" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> },
+                { time: '17:30', name: 'VIN D\'HONNEUR', right: true, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.5 3a2.5 2.5 0 0 0-5 0V8c0 1.5 1.5 3 2.5 3s2.5-1.5 2.5-3V3z"/><path strokeLinecap="round" strokeLinejoin="round" d="M13 11v8"/><path strokeLinecap="round" strokeLinejoin="round" d="M10 19h6"/><path strokeLinecap="round" strokeLinejoin="round" d="M6 3v2"/></svg> },
+                { time: '18:00', name: 'BANQUET', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg> },
+                { time: '19:30', name: 'FÊTE', right: true, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
+                { time: '21:00', name: 'HEURE FOLLE', right: false, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg> },
                 { time: '23:30', name: 'FIN', right: true, icon: <svg className="w-5 h-5 stroke-burgundy stroke-[1.5] fill-none bg-paper p-[2px]" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
               ].map((item, idx) => (
-                <div key={idx} className="relative flex items-center justify-between w-full mb-10 last:mb-0">
+                <Reveal key={idx} direction={item.right ? 'right' : 'left'} delay={idx * 0.07}>
+                <div className="relative flex items-center justify-between w-full mb-10 last:mb-0">
                   {/* Left Side */}
                   <div className={`w-1/2 pr-6 text-right ${item.right ? 'invisible' : ''}`}>
                     <span className="font-serif font-bold text-lg leading-none block text-burgundy">{item.time}</span>
@@ -418,12 +556,13 @@ function App() {
                     <span className="font-sans text-[10px] tracking-widest mt-1 block text-burgundy/80">{item.name}</span>
                   </div>
                 </div>
+                </Reveal>
               ))}
             </div>
 
-            <div className="flex flex-col items-center text-center text-burgundy w-full mb-8">
-              <h3 className="font-sans font-medium tracking-[0.1em] text-sm mb-4">CÓDIGO DE VESTIMENTA</h3>
-              <p className="font-serif italic text-lg mb-6">Formal</p>
+            <Reveal><div className="flex flex-col items-center text-center text-burgundy w-full mb-8">
+              <h3 className="font-sans font-medium tracking-[0.1em] text-sm mb-4">CODE VESTIMENTAIRE</h3>
+              <p className="font-serif italic text-lg mb-6">{content.dressCode}</p>
               
               <div className="flex justify-center mb-6">
                 <svg className="w-16 h-16 fill-burgundy" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -432,9 +571,9 @@ function App() {
               </div>
               
               <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto pb-4">
-                Con mucho cariño, les pedimos evitar prendas en color blanco.
+                Avec beaucoup d'affection, nous vous demandons d'éviter les vêtements blancs.
               </p>
-            </div>
+            </div></Reveal>
           </div>
 
           <FloralBorder flip src={content.floralImage} />
@@ -442,65 +581,84 @@ function App() {
           {/* Bottom Call to Actions */}
           <div className="bg-[#4a1c22] w-full py-16 text-white text-center flex flex-col items-center">
             
-            <div className="mb-14">
+            <Reveal><div className="mb-14">
               <Gift className="w-8 h-8 stroke-1 mx-auto mb-4" />
-              <h3 className="font-sans tracking-wide text-sm mb-4">SUGERENCIA DE REGALOS</h3>
+              <h3 className="font-sans tracking-wide text-sm mb-4">SUGGESTION DE CADEAUX</h3>
               <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto mb-6">
-                El mejor regalo es tu presencia, pero si deseas tener un detalle con nosotros, les dejamos esta opción
+                Le meilleur cadeau est votre présence, mais si vous souhaitez nous offrir quelque chose, voici une option :
               </p>
-              <p className="font-sans text-xs tracking-widest uppercase mb-2">Lluvia de sobres</p>
+              <p className="font-sans text-xs tracking-widest uppercase mb-2">Urne nuptiale</p>
               <svg className="w-6 h-6 mx-auto stroke-white stroke-1 bg-transparent" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
-            </div>
+            </div></Reveal>
 
             <div className="w-[80%] h-[1px] bg-white/10 mb-14"></div>
 
-            <div className="mb-14 min-w-[80%]">
+            <Reveal delay={0.1}><div className="mb-14 min-w-[80%]">
               <Hotel className="w-8 h-8 stroke-1 mx-auto mb-4" />
-              <h3 className="font-sans tracking-wide text-sm mb-6">SUGERENCIA DE HOSPEDAJE</h3>
+              <h3 className="font-sans tracking-wide text-sm mb-6">SUGGESTION D'HÉBERGEMENT</h3>
               
-              <div className="mb-6">
-                <p className="font-serif text-lg mb-2">Hotel Regina Resort</p>
-                <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
-                  Más información
-                </button>
-              </div>
-              
-              <div>
-                <p className="font-serif text-lg mb-2">Casa Villa Albina</p>
-                <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
-                  Más información
-                </button>
-              </div>
-            </div>
+              {content.hotel1Name && (
+                <div className="mb-6">
+                  <p className="font-serif text-lg mb-2">{content.hotel1Name}</p>
+                  {content.hotel1Url ? (
+                    <a href={content.hotel1Url} target="_blank" rel="noopener noreferrer" className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
+                      Plus d'informations
+                    </a>
+                  ) : (
+                    <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans opacity-60 cursor-default">
+                      Plus d'informations
+                    </button>
+                  )}
+                </div>
+              )}
+              {content.hotel2Name && (
+                <div>
+                  <p className="font-serif text-lg mb-2">{content.hotel2Name}</p>
+                  {content.hotel2Url ? (
+                    <a href={content.hotel2Url} target="_blank" rel="noopener noreferrer" className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
+                      Plus d'informations
+                    </a>
+                  ) : (
+                    <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans opacity-60 cursor-default">
+                      Plus d'informations
+                    </button>
+                  )}
+                </div>
+              )}
+            </div></Reveal>
 
             <div className="w-[80%] h-[1px] bg-white/10 mb-14"></div>
 
-            <div className="mb-16">
+            <Reveal delay={0.1}><div className="mb-16">
               <Heart className="w-8 h-8 stroke-1 mx-auto mb-4" />
-              <h3 className="font-sans tracking-wide text-sm mb-4">CONFIRMAR ASISTENCIA</h3>
+              <h3 className="font-sans tracking-wide text-sm mb-4">CONFIRMER LA PRÉSENCE</h3>
               <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto mb-6">
-                Agradecemos que confirmes tu asistencia antes del 01 de noviembre
+                Nous vous remercions de confirmer votre présence avant le {content.rsvpDeadline}
               </p>
               <button className="border-2 border-white text-white rounded-full px-8 py-2 text-sm font-sans hover:bg-white hover:text-burgundy transition-colors">
-                Confirmar aquí
+                Confirmer ici
               </button>
-            </div>
+            </div></Reveal>
 
-            <p className="font-sans text-xs tracking-widest uppercase opacity-80 mb-6">
-              Esperamos contar con su presencia
-            </p>
-            <p className="font-cursive text-5xl opacity-90">
-              Muchas Gracias!
-            </p>
+            <Reveal delay={0.05}><p className="font-sans text-xs tracking-widest uppercase opacity-80 mb-6">
+              Nous espérons compter sur votre présence
+            </p></Reveal>
+            <Reveal delay={0.15}><p className="font-cursive text-4xl sm:text-5xl opacity-90">
+              Merci Beaucoup !
+            </p></Reveal>
           </div>
           
           <FloralBorder src={content.floralImage} />
 
-          <div className="w-full px-8 flex justify-center mt-[-20px]">
-             <img 
-              src={content.holdingHandsImage} 
-              alt="Couple holding hands" 
+          <div className="w-full px-8 pb-12 flex justify-center -mt-[30px] relative z-10">
+            <motion.img
+              src={content.holdingHandsImage}
+              alt="Couple holding hands"
               className="w-full aspect-[4/5] object-cover rounded-sm shadow-md"
+              initial={{ opacity: 0, scale: 1.04 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
             />
           </div>
           </motion.div>

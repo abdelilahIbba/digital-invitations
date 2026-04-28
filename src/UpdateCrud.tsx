@@ -60,77 +60,173 @@ export default function UpdateCrud() {
   return (
     <div className="p-8 max-w-4xl mx-auto font-sans bg-white min-h-screen text-neutral-800">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Content Management</h1>
+        <h1 className="text-3xl font-bold">Gestion du contenu</h1>
         <div className="space-x-4">
-          <Link to="/" className="px-4 py-2 bg-neutral-200 rounded hover:bg-neutral-300 transition-colors">View Site</Link>
-          <button onClick={handleSave} className="px-4 py-2 bg-[#63262f] text-white rounded hover:bg-[#4a1c22] transition-colors">Save Changes</button>
+          <Link to="/" className="px-4 py-2 bg-neutral-200 rounded hover:bg-neutral-300 transition-colors">Voir le site</Link>
+          <button onClick={handleSave} className="px-4 py-2 bg-[#63262f] text-white rounded hover:bg-[#4a1c22] transition-colors">Enregistrer</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold border-b pb-2">Texts</h2>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1">Bride Name</label>
-            <input 
-              type="text" 
-              value={data.brideName} 
-              onChange={e => handleChange('brideName', e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Groom Name</label>
-            <input 
-              type="text" 
-              value={data.groomName} 
-              onChange={e => handleChange('groomName', e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Date</label>
-            <input 
-              type="text" 
-              value={data.date} 
-              onChange={e => handleChange('date', e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Target Timer Date/Time</label>
-            <input 
-              type="datetime-local" 
-              value={data.targetDate || ''} 
-              onChange={e => handleChange('targetDate', e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-        </div>
+      <div className="space-y-10">
 
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold border-b pb-2">Images</h2>
-          
-          {['letterBgImage', 'paperBgImage', 'keepsakeImage', 'floralImage', 'huggingImage', 'outdoorImage', 'holdingHandsImage'].map(imgKey => (
+        {/* Section: Couple */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">👰 Couple</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Prénom de la mariée</label>
+              <input type="text" value={data.brideName || ''} onChange={e => handleChange('brideName', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Prénom du marié</label>
+              <input type="text" value={data.groomName || ''} onChange={e => handleChange('groomName', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Date & Heure */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">📅 Date & Heure</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Date affichée (ex: 06.12.2026)</label>
+              <input type="text" value={data.date || ''} onChange={e => handleChange('date', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Date/heure du compte à rebours</label>
+              <input type="datetime-local" value={data.targetDate || ''} onChange={e => handleChange('targetDate', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Date limite RSVP (ex: 01 novembre)</label>
+              <input type="text" value={data.rsvpDeadline || ''} onChange={e => handleChange('rsvpDeadline', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="01 novembre" />
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Verset biblique */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">📖 Verset biblique</h2>
+          <div>
+            <label className="block text-sm font-medium mb-1">Verset</label>
+            <textarea value={data.bibleVerse || ''} onChange={e => handleChange('bibleVerse', e.target.value)} className="w-full border rounded px-3 py-2 h-20 resize-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Référence (ex: Colossiens 3:14)</label>
+            <input type="text" value={data.bibleVerseRef || ''} onChange={e => handleChange('bibleVerseRef', e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+        </section>
+
+        {/* Section: Parents */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">👨‍👩‍👧 Parents</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Mère du marié</label>
+              <input type="text" value={data.groomMother || ''} onChange={e => handleChange('groomMother', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Père du marié</label>
+              <input type="text" value={data.groomFather || ''} onChange={e => handleChange('groomFather', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Mère de la mariée</label>
+              <input type="text" value={data.brideMother || ''} onChange={e => handleChange('brideMother', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Père de la mariée</label>
+              <input type="text" value={data.brideFather || ''} onChange={e => handleChange('brideFather', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Lieu */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">📍 Lieu de réception</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Nom du lieu</label>
+              <input type="text" value={data.venueName || ''} onChange={e => handleChange('venueName', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Ville</label>
+              <input type="text" value={data.venueCity || ''} onChange={e => handleChange('venueCity', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Coordonnées GPS (lat,lng)</label>
+              <input type="text" value={data.mapCoordinates || ''} onChange={e => handleChange('mapCoordinates', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="-17.781617,-63.179379" />
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Code vestimentaire */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">👔 Code vestimentaire</h2>
+          <div>
+            <label className="block text-sm font-medium mb-1">Code vestimentaire</label>
+            <input type="text" value={data.dressCode || ''} onChange={e => handleChange('dressCode', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="Tenue formelle" />
+          </div>
+        </section>
+
+        {/* Section: Hébergement */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">🏨 Hébergement suggéré</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Hôtel 1 — Nom</label>
+              <input type="text" value={data.hotel1Name || ''} onChange={e => handleChange('hotel1Name', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Hôtel 1 — Lien (optionnel)</label>
+              <input type="text" value={data.hotel1Url || ''} onChange={e => handleChange('hotel1Url', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="https://..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Hôtel 2 — Nom</label>
+              <input type="text" value={data.hotel2Name || ''} onChange={e => handleChange('hotel2Name', e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Hôtel 2 — Lien (optionnel)</label>
+              <input type="text" value={data.hotel2Url || ''} onChange={e => handleChange('hotel2Url', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="https://..." />
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Musique */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">🎵 Musique</h2>
+          <div>
+            <label className="block text-sm font-medium mb-1">URL YouTube / YouTube Music</label>
+            <input type="text" value={data.musicUrl || ''} onChange={e => handleChange('musicUrl', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="https://www.youtube.com/watch?v=..." />
+          </div>
+        </section>
+
+        {/* Section: Images */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">🖼️ Images</h2>
+          {[
+            { key: 'letterBgImage', label: 'Fond de la lettre' },
+            { key: 'paperBgImage', label: 'Fond du papier (confettis)' },
+            { key: 'keepsakeImage', label: 'Photo souvenir (polaroid)' },
+            { key: 'floralImage', label: 'Bordure florale' },
+            { key: 'huggingImage', label: 'Photo couple (embrassés)' },
+            { key: 'outdoorImage', label: 'Photo couple (extérieur)' },
+            { key: 'holdingHandsImage', label: 'Photo couple (mains)' },
+          ].map(({ key: imgKey, label }) => (
             <div key={imgKey} className="flex flex-col gap-2 border p-4 rounded bg-neutral-50">
-              <label className="block text-sm font-medium">{imgKey}</label>
-              
+              <label className="block text-sm font-medium">{label}</label>
               <div className="flex items-center gap-4">
                 {data[imgKey] && (
-                  <img src={data[imgKey]} alt={imgKey} className="w-16 h-16 object-cover rounded shadow-sm" />
+                  <img src={data[imgKey]} alt={label} className="w-16 h-16 object-cover rounded shadow-sm flex-shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 )}
-                
                 <div className="flex-1">
-                  <input 
-                    type="text" 
-                    value={data[imgKey]} 
+                  <input
+                    type="text"
+                    value={data[imgKey] || ''}
                     onChange={e => handleChange(imgKey, e.target.value)}
                     className="w-full border rounded px-3 py-2 text-sm mb-2"
-                    placeholder="Image URL or Path"
+                    placeholder="URL de l'image"
                   />
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept="image/*"
                     onChange={e => {
                       if (e.target.files && e.target.files[0]) {
@@ -143,7 +239,8 @@ export default function UpdateCrud() {
               </div>
             </div>
           ))}
-        </div>
+        </section>
+
       </div>
     </div>
   );
