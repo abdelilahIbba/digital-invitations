@@ -70,121 +70,142 @@ function App() {
   return (
     <div className="min-h-screen bg-neutral-100 flex items-start sm:items-center justify-center p-0 sm:p-8">
       <div className="w-full max-w-md bg-paper h-screen sm:h-[850px] sm:max-h-[90vh] sm:rounded-xl shadow-2xl overflow-x-hidden overflow-y-auto relative scroll-smooth flex flex-col">
-        <AnimatePresence>
-          {!isOpen && (
-            <motion.div 
-              className="absolute inset-0 z-50 bg-burgundy flex flex-col items-center justify-center cursor-pointer min-h-full"
-              initial={{ y: 0 }}
-              exit={{ y: '-100%' }}
-              transition={{ duration: 0.8, ease: 'easeInOut' }}
-              onClick={() => {
-                if (!isOpening) {
-                  setIsOpening(true);
-                  setTimeout(() => setIsOpen(true), 4000);
-                }
-              }}
-              style={{ position: 'sticky', top: 0, bottom: 0, height: '100%' }}
-            >
-              <div className="text-center text-white mb-12">
-                <h1 className="font-cursive text-8xl mb-2 leading-none">Marcos</h1>
-                <p className="font-serif text-3xl italic mb-2">&</p>
-                <h1 className="font-cursive text-8xl leading-none">Mariana</h1>
-              </div>
-              
+        {/* Hero Section */}
+        <motion.div 
+          className="relative w-full bg-burgundy flex flex-col items-center justify-center cursor-pointer shrink-0 z-50 overflow-hidden"
+          animate={{ minHeight: isOpen ? '70vh' : '100%' }}
+          transition={{ duration: 1.5, ease: 'easeInOut' }}
+          onClick={() => {
+            if (!isOpening && !isOpen) {
+              setIsOpening(true);
+              setTimeout(() => setIsOpen(true), 6500);
+            }
+          }}
+        >
+          <div className="text-center text-white mb-12">
+            <h1 className="font-cursive text-8xl mb-2 leading-none">Marcos</h1>
+            <p className="font-serif text-3xl italic mb-2">&</p>
+            <h1 className="font-cursive text-8xl leading-none">Mariana</h1>
+          </div>
+          
+          <motion.div 
+            className="relative w-72 h-48 mt-12"
+            whileHover={!isOpening && !isOpen ? { scale: 1.05 } : {}}
+            animate={!isOpening && !isOpen ? { y: [0, -10, 0] } : { y: 0 }}
+            transition={{ repeat: !isOpening && !isOpen ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
+          >
+            {/* Envelope Back */}
+            <div className="absolute inset-0 bg-[#4a1c22] rounded-md shadow-xl border border-white/5"></div>
+
+            {/* Glow Effect */}
+            {isOpening && (
               <motion.div 
-                className="relative w-72 h-48 mt-12"
-                whileHover={!isOpening ? { scale: 1.05 } : {}}
-                animate={!isOpening ? { y: [0, -10, 0] } : { y: 0 }}
-                transition={{ repeat: !isOpening ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
-              >
-                {/* Envelope Back */}
-                <div className="absolute inset-0 bg-[#4a1c22] rounded-md shadow-xl border border-white/5"></div>
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-yellow-100/50 blur-xl rounded-full mix-blend-overlay pointer-events-none"
+                initial={{ opacity: 0, scale: 0.5, y: -20 }}
+                animate={{ opacity: [0, 1, 0.8, 0], scale: [0.5, 2, 2.5], y: [-20, -60, -100] }}
+                transition={{ duration: 5, ease: "easeOut", delay: 0.5 }}
+                style={{ zIndex: 4 }}
+              />
+            )}
 
-                {/* Letter */}
-                <motion.div 
-                  className="absolute bottom-4 left-4 right-4 h-40 bg-paper rounded-t-lg shadow-inner flex flex-col items-center justify-start pt-6 px-4 border border-neutral-200"
-                  style={{ zIndex: 5 }}
-                  animate={isOpening ? { y: -120 } : { y: 0 }}
-                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.4 }}
-                >
-                   {guestName && (
-                     <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight">Para:<br/>{guestName}</p>
-                   )}
-                   {!guestName && (
-                     <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight">Nuestra<br/>Boda</p>
-                   )}
-                   <p className="font-serif text-burgundy opacity-50 text-sm mt-4">Abrir invitación</p>
-                </motion.div>
+            {/* Letter */}
+            <motion.div 
+              className="absolute bottom-4 left-4 right-4 h-40 bg-white rounded-t-lg shadow-inner flex flex-col items-center justify-start pt-6 px-4 border border-neutral-200 overflow-hidden"
+              style={{ 
+                zIndex: 5,
+                backgroundImage: 'url("https://images.unsplash.com/photo-1603513492128-ba7bc9b3e143?w=800&q=80")', 
+                backgroundSize: 'cover'
+              }}
+              animate={isOpening || isOpen ? { y: -180 } : { y: 0 }}
+              transition={{ duration: 2.5, ease: [0.16, 1, 0.3, 1], delay: 0.8 }}
+            >
+               {guestName && (
+                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Para:<br/>{guestName}</p>
+               )}
+               {!guestName && (
+                 <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Nuestra<br/>Boda</p>
+               )}
+               {(!isOpening && !isOpen) && (
+                 <p className="font-serif text-burgundy opacity-50 text-sm mt-4">Abrir invitación</p>
+               )}
+            </motion.div>
 
-                {/* Paper Messages */}
-                {isOpening && (
-                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 6 }}>
-                    {[
-                      { id: 1, content: '❤️', endX: -90, endY: -180, rotate: -25, delay: 0.6 },
-                      { id: 2, content: `¡Hola ${guestName ? guestName.split(' ')[0] : 'Invitado'}!`, endX: 70, endY: -200, rotate: 15, delay: 0.8 },
-                      { id: 3, content: '🥂', endX: -40, endY: -250, rotate: -10, delay: 1.0 },
-                      { id: 4, content: `¡Acompáñanos ${guestName ? guestName.split(' ')[0] : ''}!`, endX: 90, endY: -140, rotate: 20, delay: 1.2 },
-                      { id: 5, content: '💍', endX: 10, endY: -280, rotate: 5, delay: 1.4 },
-                    ].map((msg) => (
-                      <motion.div
-                        key={msg.id}
-                        className="absolute top-[40%] left-1/2 bg-paper text-burgundy px-4 py-2 rounded shadow-lg text-sm font-serif whitespace-nowrap border border-burgundy/10 flex items-center justify-center font-bold z-50"
-                        initial={{ opacity: 0, scale: 0.2, x: '-50%', y: '-50%' }}
-                        animate={{ 
-                          opacity: [0, 1, 1, 0], 
-                          scale: [0.5, 1, 1, 0.8], 
-                          x: `calc(-50% + ${msg.endX}px)`, 
-                          y: `calc(-50% + ${msg.endY}px)`, 
-                          rotate: msg.rotate 
-                        }}
-                        transition={{ duration: 2.5, delay: msg.delay, ease: 'easeOut' }}
-                      >
-                        {msg.content}
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
+            {/* Paper Messages */}
+            {isOpening && (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 6 }}>
+                {[
+                  { id: 1, content: `¡Hola ${guestName ? guestName.split(' ')[0] : 'Invitado'}!`, endX: -70, endY: -220, rotate: -15, delay: 1.5 },
+                  { id: 2, content: `¡Acompáñanos a celebrar!`, endX: 80, endY: -160, rotate: 10, delay: 2.5 },
+                ].map((msg) => (
+                  <motion.div
+                    key={msg.id}
+                    className="absolute top-[40%] left-1/2 text-[#3a1c22] px-6 py-4 rounded-sm shadow-2xl text-sm font-serif whitespace-nowrap flex items-center justify-center font-bold z-50 border border-[#e5d5c5]"
+                    style={{
+                      backgroundImage: 'url("https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=400&q=80")',
+                      backgroundSize: 'cover',
+                      boxShadow: '0 15px 30px rgba(0,0,0,0.4), inset 0 0 10px rgba(255,255,255,0.5)'
+                    }}
+                    initial={{ opacity: 0, scale: 0.2, x: '-50%', y: '-50%', filter: 'blur(12px)' }}
+                    animate={{ 
+                      opacity: [0, 1, 1], 
+                      scale: [0.6, 1, 1], 
+                      x: `calc(-50% + ${msg.endX}px)`, 
+                      y: `calc(-50% + ${msg.endY}px)`, 
+                      rotate: [0, msg.rotate, msg.rotate],
+                      filter: ['blur(12px)', 'blur(0px)', 'blur(0px)']
+                    }}
+                    transition={{ duration: 2.0, delay: msg.delay, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <div className="absolute inset-0 bg-white/40 mix-blend-overlay"></div>
+                    <span className="relative z-10 text-lg drop-shadow-md mix-blend-multiply opacity-90">{msg.content}</span>
+                  </motion.div>
+                ))}
+              </div>
+            )}
 
-                {/* Envelope Front (Left, Right, Bottom) */}
-                <div 
-                  className="absolute inset-0 bg-[#63262f] rounded-md shadow-[0_-2px_10px_rgba(0,0,0,0.1)]"
-                  style={{ 
-                    clipPath: 'polygon(0 0, 50% 60%, 100% 0, 100% 100%, 0 100%)',
-                    zIndex: 10 
-                  }}
-                >
-                  <div className="absolute inset-0 border-2 border-black/5 rounded-md pointer-events-none"></div>
-                </div>
+            {/* Envelope Front (Left, Right, Bottom) */}
+            <div 
+              className="absolute inset-0 bg-[#63262f] rounded-md shadow-[0_-2px_10px_rgba(0,0,0,0.1)]"
+              style={{ 
+                clipPath: 'polygon(0 0, 50% 60%, 100% 0, 100% 100%, 0 100%)',
+                zIndex: 10 
+              }}
+            >
+              <div className="absolute inset-0 border-2 border-black/5 rounded-md pointer-events-none"></div>
+            </div>
 
-                {/* Envelope Top Flap */}
-                <motion.div 
-                  className="absolute top-0 left-0 w-full h-[60%] bg-burgundy drop-shadow-xl"
-                  style={{ 
-                    clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
-                    transformOrigin: 'top center',
-                    zIndex: 20
-                  }}
-                  initial={{ rotateX: 0 }}
-                  animate={isOpening ? { rotateX: 180, zIndex: 2 } : { rotateX: 0, zIndex: 20 }}
-                  transition={{ duration: 0.6, ease: 'easeInOut' }}
-                >
-                  {/* Flap details */}
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-[1.5px] border-[#daaa77] bg-[#4a1c22] flex items-center justify-center shadow-md">
-                     <span className="text-[#daaa77] text-xs font-serif font-bold tracking-widest mt-1">M<span className="mx-[1px]">&</span>M</span>
-                  </div>
-                </motion.div>
-              </motion.div>
-              
-              <div className="mt-16 text-white/80 font-sans tracking-widest text-sm">
-                06.12.2025
+            {/* Envelope Top Flap */}
+            <motion.div 
+              className="absolute top-0 left-0 w-full h-[60%] bg-burgundy drop-shadow-xl"
+              style={{ 
+                clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
+                transformOrigin: 'top center',
+                zIndex: 20
+              }}
+              initial={{ rotateX: 0 }}
+              animate={isOpening || isOpen ? { rotateX: 180, zIndex: 2 } : { rotateX: 0, zIndex: 20 }}
+              transition={{ duration: 1.2, ease: 'easeInOut' }}
+            >
+              {/* Flap details */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-[1.5px] border-[#daaa77] bg-[#4a1c22] flex items-center justify-center shadow-md">
+                 <span className="text-[#daaa77] text-xs font-serif font-bold tracking-widest mt-1">M<span className="mx-[1px]">&</span>M</span>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </motion.div>
+          
+          <div className="mt-16 text-white/80 font-sans tracking-widest text-sm">
+            06.12.2025
+          </div>
+        </motion.div>
 
         {/* Content Section */}
         {isOpen && (
-          <div className="bg-paper flex flex-col items-center pb-20 w-full shrink-0">
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
+            className="bg-paper flex flex-col items-center pb-20 w-full shrink-0"
+          >
             {/* Top image/border space */}
             <FloralBorder />
           
@@ -430,7 +451,7 @@ function App() {
               className="w-full aspect-[4/5] object-cover rounded-sm shadow-md"
             />
           </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
