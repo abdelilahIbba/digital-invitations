@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, list, del } from '@vercel/blob';
-import fallbackData from '../src/data.json';
+import { createRequire } from 'module';
+
+// createRequire is traced by Vercel's bundler (nft) and supports JSON natively
+const _require = createRequire(import.meta.url);
 
 const BLOB_KEY = 'invitation-content.json';
 
@@ -17,8 +20,8 @@ async function getContent(): Promise<any> {
     console.error('getContent blob error:', e);
   }
 
-  // Fallback: return the statically imported data.json
-  return fallbackData;
+  // Fallback: load bundled data.json via require (reliable in Vercel serverless)
+  return _require('../src/data.json');
 }
 
 // Increase body limit for large payloads
