@@ -81,11 +81,30 @@ const SoundWave = ({ active }: { active: boolean }) => (
   </div>
 );
 
+// Spotify IFrame Embed API types
+declare global {
+  interface Window {
+    onSpotifyIframeApiReady: (api: any) => void;
+  }
+}
+
+/** Convert a Spotify share URL or URI to a spotify: URI.
+ *  Falls back to the default calm piano playlist. */
+function toSpotifyUri(url: string | undefined): string {
+  const DEFAULT = 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO'; // Peaceful Piano
+  if (!url) return DEFAULT;
+  if (url.startsWith('spotify:')) return url;
+  const m = url.match(/open\.spotify\.com\/(track|album|playlist)\/([A-Za-z0-9]+)/);
+  return m ? `spotify:${m[1]}:${m[2]}` : DEFAULT;
+}
+
 function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const spotifyApiRef = useRef<any>(null);      // stores IFrameAPI once ready
+  const spotifyControllerRef = useRef<any>(null);
   const envelopeControls = useAnimation();
 
   // Start the envelope idle float animation
@@ -95,6 +114,76 @@ function App() {
       { duration: 3, ease: 'easeInOut', repeat: Infinity }
     );
   }, [envelopeControls]);
+
+  // Eagerly load the Spotify script on mount so the API is ready before the user clicks.
+  // Also inject CSS + a MutationObserver to suppress the promo bar Spotify injects into <body>.
+  useEffect(() => {
+    // CSS kill-switch for the floating promo banner
+    const style = document.createElement('style');
+    style.textContent = [
+      '#SpotifyPromotion',
+      'div[id*="spotify-promotion"]',
+      'div[class*="SpotifyPromotion"]',
+      'div[class*="spotify-promotion"]',
+    ].join(',') + '{ display:none!important; }';
+    document.head.appendChild(style);
+
+    // MutationObserver: hide any Spotify promo div added directly to <body>
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(m => {
+        m.addedNodes.forEach(node => {
+          if (node instanceof HTMLElement) {
+            const id = node.id || '';
+            const cls = node.className || '';
+            if (
+              (id && id !== 'spotify-embed-container' && id.toLowerCase().includes('spotify')) ||
+              cls.toLowerCase().includes('promotion')
+            ) {
+              node.style.display = 'none';
+            }
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true });
+
+    // Store IFrameAPI reference when it becomes ready and create controller immediately
+    window.onSpotifyIframeApiReady = (IFrameAPI: any) => {
+      spotifyApiRef.current = IFrameAPI;
+      const container = document.getElementById('spotify-embed-container');
+      if (container) {
+        IFrameAPI.createController(
+          container,
+          { uri: 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO', width: '300', height: '80', theme: '0' },
+          (controller: any) => {
+            spotifyControllerRef.current = controller;
+          }
+        );
+      }
+    };
+
+    if (!document.getElementById('spotify-iframe-api')) {
+      const script = document.createElement('script');
+      script.id = 'spotify-iframe-api';
+      script.src = 'https://open.spotify.com/embed/iframe-api/v1';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  /** Called within the envelope click handler (user gesture) — plays the controller. */
+  const initSpotify = (uri: string) => {
+    if (spotifyControllerRef.current) {
+      if (uri && uri !== 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO') {
+        spotifyControllerRef.current.loadUri(uri);
+        setTimeout(() => spotifyControllerRef.current.play(), 1000);
+      } else {
+        spotifyControllerRef.current.play();
+      }
+    }
+  };
 
 
   const [guestName, setGuestName] = useState<string | null>(null);
@@ -194,7 +283,12 @@ function App() {
             if (!isOpening && !isOpen) {
               setIsOpening(true);
               setIsPlaying(true);
-              audioRef.current?.play().catch(() => {});
+              // Use Spotify embed for music; fall back to <audio> for plain URLs
+              if (!content?.musicUrl || content.musicUrl.includes('spotify') || content.musicUrl === '') {
+                initSpotify(toSpotifyUri(content?.musicUrl));
+              } else {
+                audioRef.current?.play().catch(() => {});
+              }
               // Shake the envelope then scale it up as it opens
               envelopeControls.stop();
               envelopeControls.start(
@@ -476,8 +570,8 @@ function App() {
           </motion.div>
         </motion.div>
 
-        {/* Hidden audio element for background music */}
-        {content?.musicUrl && (
+        {/* Hidden audio element for non-Spotify URLs */}
+        {content?.musicUrl && !content.musicUrl.includes('spotify') && (
           <audio
             ref={audioRef}
             src={content.musicUrl}
@@ -486,6 +580,11 @@ function App() {
             className="hidden"
           />
         )}
+
+        {/* Spotify IFrame Embed — rendered transparently in the DOM so browsers don't block autoplay, without showing a promo bar */}
+        <div style={{ position: 'absolute', opacity: '0.001', pointerEvents: 'none', width: '300px', height: '80px', zIndex: -1 }} aria-hidden="true">
+          <div id="spotify-embed-container" />
+        </div>
 
         {/* Content Section */}
         {isOpen && (
@@ -631,10 +730,14 @@ function App() {
                   <button 
                     className="relative w-12 h-12 rounded-full border border-white flex items-center justify-center hover:bg-white/10 transition-colors z-10"
                     onClick={() => {
-                      if (isPlaying) {
-                        audioRef.current?.pause();
+                      if (spotifyControllerRef.current) {
+                        try {
+                          if (isPlaying) spotifyControllerRef.current.pause();
+                          else spotifyControllerRef.current.resume();
+                        } catch (_) {}
                       } else {
-                        audioRef.current?.play().catch(() => {});
+                        if (isPlaying) audioRef.current?.pause();
+                        else audioRef.current?.play().catch(() => {});
                       }
                       setIsPlaying(prev => !prev);
                     }}
