@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `images/${Date.now()}-${filename}`,
       req, // IncomingMessage is a Readable stream — accepted directly by @vercel/blob
       {
-        access: 'private',
+        access: 'public',
         contentType,
       }
     );
