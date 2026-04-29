@@ -175,12 +175,20 @@ function App() {
 
   /** Called within the envelope click handler (user gesture) — plays the controller. */
   const initSpotify = (uri: string) => {
+    const play = () => {
+      spotifyControllerRef.current.play();
+      setIsPlaying(true);
+    };
+
     if (spotifyControllerRef.current) {
-      if (uri && uri !== 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO') {
+      const isCustomUri = uri && uri !== 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO';
+      if (isCustomUri) {
         spotifyControllerRef.current.loadUri(uri);
-        setTimeout(() => spotifyControllerRef.current.play(), 1000);
+        // Wait for URI to load before playing
+        spotifyControllerRef.current.addListener('ready', play);
+        setTimeout(play, 1500); // fallback if ready event fails
       } else {
-        spotifyControllerRef.current.play();
+        play();
       }
     }
   };
@@ -282,12 +290,11 @@ function App() {
           onClick={() => {
             if (!isOpening && !isOpen) {
               setIsOpening(true);
-              setIsPlaying(true);
               // Use Spotify embed for music; fall back to <audio> for plain URLs
               if (!content?.musicUrl || content.musicUrl.includes('spotify') || content.musicUrl === '') {
                 initSpotify(toSpotifyUri(content?.musicUrl));
               } else {
-                audioRef.current?.play().catch(() => {});
+                audioRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
               }
               // Shake the envelope then scale it up as it opens
               envelopeControls.stop();
