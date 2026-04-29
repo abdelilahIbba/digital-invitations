@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { put, list, del } from '@vercel/blob';
+import { put, list, del, getDownloadUrl } from '@vercel/blob';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,13 +10,15 @@ async function getContent(): Promise<any> {
   try {
     const { blobs } = await list({ prefix: BLOB_KEY });
     if (blobs.length > 0) {
-      // Pass auth token — required for private blob stores
-      const resp = await fetch(blobs[0].url, {
-        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-      });
+      // getDownloadUrl works for both public and private blobs (generates signed URL)
+      const downloadUrl = getDownloadUrl(blobs[0].url);
+      const resp = await fetch(downloadUrl);
+      if (!resp.ok) throw new Error(`Blob fetch failed: ${resp.status} ${resp.statusText}`);
       return await resp.json();
     }
-  } catch {}
+  } catch (e) {
+    console.error('getContent blob error:', e);
+  }
 
   // Fallback: read the bundled src/data.json (read-only, from the deployment)
   const dataPath = path.join(process.cwd(), 'src', 'data.json');
@@ -61,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await put(BLOB_KEY, JSON.stringify(req.body, null, 2), {
-        access: 'public',
+        access: 'private',
         addRandomSuffix: false,
         contentType: 'application/json',
       });
