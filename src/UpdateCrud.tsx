@@ -46,12 +46,17 @@ export default function UpdateCrud() {
 
   const handleSave = async () => {
     try {
-      await fetch('/api/content', {
+      const res = await fetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      alert('Content saved successfully!');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Échec de la sauvegarde: ${err.details || err.error || res.status}`);
+        return;
+      }
+      alert('Contenu enregistré avec succès !');
     } catch (e) {
       console.error("Failed to save content", e);
       alert('Failed to save content');

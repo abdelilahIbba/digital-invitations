@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, list, del } from '@vercel/blob';
-import fs from 'fs';
-import path from 'path';
+import fallbackData from '../src/data.json';
 
 const BLOB_KEY = 'invitation-content.json';
 
@@ -18,9 +17,8 @@ async function getContent(): Promise<any> {
     console.error('getContent blob error:', e);
   }
 
-  // Fallback: read the bundled src/data.json (read-only, from the deployment)
-  const dataPath = path.join(process.cwd(), 'src', 'data.json');
-  return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+  // Fallback: return the statically imported data.json
+  return fallbackData;
 }
 
 // Increase body limit for large payloads
