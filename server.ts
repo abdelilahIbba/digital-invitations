@@ -1,5 +1,4 @@
 import express from 'express';
-import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
@@ -14,21 +13,6 @@ async function startServer() {
 
   // Middleware for parsing JSON bodies
   app.use(express.json());
-
-  // Set up multer for file uploads
-  const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-      const dir = path.join(process.cwd(), 'public', 'images');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      cb(null, dir);
-    },
-    filename: function (req, file, cb) {
-      cb(null, Date.now() + '-' + file.originalname);
-    }
-  });
-  const upload = multer({ storage: storage });
 
   // API Route: Get content data
   app.get('/api/content', (req, res) => {
@@ -52,13 +36,28 @@ async function startServer() {
     }
   });
 
-  // API Route: Upload image
-  app.post('/api/upload', upload.single('image'), (req, res) => {
-    if (!req.file) {
+  // API Route: Upload image (emulating Vercel's raw body upload)
+  app.post('/api/upload', express.raw({ type: '*/*', limit: '10mb' }), (req, res) => {
+    if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    // Return relative path for src
-    res.json({ filePath: `/images/${req.file.filename}` });
+    const rawFilename = req.headers['x-filename'] as string | undefined;
+    const filename = rawFilename ? decodeURIComponent(rawFilename) : `upload-${Date.now()}.jpg`;
+    
+    // Local uploads go to public/images/
+    const safeFilename = Date.now() + '-' + filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const dir = path.join(process.cwd(), 'public', 'images');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const dest = path.join(dir, safeFilename);
+    
+    try {
+      fs.writeFileSync(dest, req.body);
+      res.json({ filePath: `/images/${safeFilename}` });
+    } catch (err) {
+      res.status(500).json({ error: 'Local upload failed' });
+    }
   });
 
   // Vite middleware for development
