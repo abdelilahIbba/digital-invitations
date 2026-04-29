@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { put, list, del, getDownloadUrl } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,9 +10,7 @@ async function getContent(): Promise<any> {
   try {
     const { blobs } = await list({ prefix: BLOB_KEY });
     if (blobs.length > 0) {
-      // getDownloadUrl works for both public and private blobs (generates signed URL)
-      const downloadUrl = getDownloadUrl(blobs[0].url);
-      const resp = await fetch(downloadUrl);
+      const resp = await fetch(blobs[0].url);
       if (!resp.ok) throw new Error(`Blob fetch failed: ${resp.status} ${resp.statusText}`);
       return await resp.json();
     }
@@ -63,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await put(BLOB_KEY, JSON.stringify(req.body, null, 2), {
-        access: 'private',
+        access: 'public',
         addRandomSuffix: false,
         contentType: 'application/json',
       });
