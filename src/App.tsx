@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useAnimation } from 'motion/react';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Heart,
@@ -57,6 +57,7 @@ function App() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeReady = useRef(false);
   const pendingPlay = useRef(false);
+  const envelopeControls = useAnimation();
 
   const sendYTCommand = useCallback((cmd: string, args: any[] = []) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -83,6 +84,14 @@ function App() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [sendYTCommand]);
+
+  // Start the envelope idle float animation
+  useEffect(() => {
+    envelopeControls.start(
+      { y: [0, -10, 0] },
+      { duration: 3, ease: 'easeInOut', repeat: Infinity }
+    );
+  }, [envelopeControls]);
 
   const getYouTubeVideoId = (url: string): string | null => {
     const patterns = [
@@ -192,14 +201,23 @@ function App() {
             if (!isOpening && !isOpen) {
               setIsOpening(true);
               setIsPlaying(true);
-              // Unmute the already-playing (muted) video — no user gesture needed for this
               if (iframeReady.current) {
                 sendYTCommand('unMute');
                 sendYTCommand('setVolume', [100]);
               } else {
-                // iframe not ready yet — set flag so onMessage handler will unmute when ready
                 pendingPlay.current = true;
               }
+              // Shake the envelope then scale it up as it opens
+              envelopeControls.stop();
+              envelopeControls.start(
+                { x: [0, -7, 7, -5, 5, -2, 0], y: 0 },
+                { duration: 0.5 }
+              ).then(() => {
+                envelopeControls.start(
+                  { scale: 1.08, y: -8, x: 0 },
+                  { duration: 1.2, ease: [0.22, 1, 0.36, 1] }
+                );
+              });
               setTimeout(() => setIsOpen(true), 8500);
             }
           }}
@@ -211,25 +229,50 @@ function App() {
           </div>
           
           <motion.div 
-            className="relative w-60 h-40 sm:w-72 sm:h-48 mt-12"
-            style={{ perspective: '1200px' }}
+            className="relative w-64 h-44 sm:w-80 sm:h-52 mt-12"
+            animate={envelopeControls}
             whileHover={!isOpening && !isOpen ? { scale: 1.05 } : {}}
-            animate={!isOpening && !isOpen ? { y: [0, -10, 0] } : { y: 0 }}
-            transition={{ repeat: !isOpening && !isOpen ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
           >
+            {/* Ambient pulsing rings — only visible before tap */}
+            {!isOpening && !isOpen && (
+              <>
+                <motion.div
+                  className="absolute -inset-3 rounded-lg border border-[#daaa77]/40 pointer-events-none"
+                  animate={{ opacity: [0.2, 0.9, 0.2], scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                  className="absolute -inset-6 rounded-lg border border-[#daaa77]/20 pointer-events-none"
+                  animate={{ opacity: [0, 0.6, 0], scale: [1, 1.09, 1] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut', delay: 0.35 }}
+                />
+              </>
+            )}
             {/* Envelope Back */}
-            <div className="absolute inset-0 bg-[#4a1c22] rounded-md shadow-xl border border-white/5"></div>
+            <div className="absolute inset-0 bg-[#3d1820] rounded-md shadow-xl border border-white/5" />
+
+            {/* Inner Warm Glow — revealed as flap opens */}
+            <motion.div
+              className="absolute inset-0 rounded-md overflow-hidden pointer-events-none"
+              style={{ zIndex: 4 }}
+              initial={{ opacity: 0 }}
+              animate={isOpening || isOpen ? { opacity: 1 } : { opacity: 0 }}
+              transition={{ duration: 1.8, delay: 1.2 }}
+            >
+              <div className="w-full h-full" style={{ background: 'linear-gradient(to bottom, #fffbf0, #f5e6d0, #ede0c4)' }} />
+              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 70%, rgba(218,170,119,0.5) 0%, transparent 65%)' }} />
+            </motion.div>
 
             {/* Letter */}
             <motion.div 
-              className="absolute bottom-4 left-4 right-4 h-40 bg-white rounded-t-lg shadow-inner flex flex-col items-center justify-start pt-6 px-4 border border-neutral-200 overflow-hidden"
+              className="absolute bottom-0 left-4 right-4 h-44 bg-white rounded-t-lg shadow-inner flex flex-col items-center justify-start pt-6 px-4 border border-neutral-200 overflow-hidden"
               style={{ 
                 zIndex: 5,
                 backgroundImage: `url("${content.letterBgImage}")`, 
                 backgroundSize: 'cover'
               }}
-              animate={isOpening || isOpen ? { y: -180 } : { y: 0 }}
-              transition={{ duration: 4.0, ease: [0.16, 1, 0.3, 1], delay: 1.5 }}
+              animate={isOpening || isOpen ? { y: -230, rotate: [0, -1.5, 1.5, -0.8, 0.4, 0] } : { y: 0, rotate: 0 }}
+              transition={{ duration: 4.5, ease: [0.16, 1, 0.3, 1], delay: 1.5 }}
             >
                {guestName && (
                  <p className="font-serif text-burgundy text-center mb-2 italic text-lg leading-tight mix-blend-multiply opacity-90 drop-shadow-sm">Pour :<br/>{guestName}</p>
@@ -299,6 +342,59 @@ function App() {
               </motion.div>
             )}
 
+            {/* Gold Sparkle Particles — burst from the seal as flap opens */}
+            {isOpening && (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 25 }}>
+                {[
+                  { x: -55, y: -85, size: 6, delay: 1.80 },
+                  { x:  65, y: -75, size: 4, delay: 1.95 },
+                  { x: -28, y: -105, size: 5, delay: 2.05 },
+                  { x:  42, y: -115, size: 3, delay: 2.15 },
+                  { x: -72, y: -55, size: 4, delay: 2.25 },
+                  { x:  85, y: -95, size: 6, delay: 2.35 },
+                  { x:  12, y: -125, size: 3, delay: 2.00 },
+                  { x: -18, y: -48, size: 5, delay: 1.88 },
+                ].map((p, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute rounded-full bg-[#daaa77]"
+                    style={{ width: p.size, height: p.size, top: '30%', left: '50%', marginLeft: -(p.size / 2) }}
+                    initial={{ opacity: 0, x: 0, y: 0, scale: 0 }}
+                    animate={{ opacity: [0, 1, 1, 0], x: p.x, y: p.y, scale: [0, 1.8, 1.2, 0] }}
+                    transition={{ duration: 2.2, delay: p.delay, ease: 'easeOut' }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Floating Hearts */}
+            {isOpening && (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 25 }}>
+                {[
+                  { x: -42, y: -190, rotate: -15, delay: 2.8 },
+                  { x:  52, y: -210, rotate:  10, delay: 3.3 },
+                  { x:  -8, y: -230, rotate:  -5, delay: 3.8 },
+                ].map((h, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute text-base select-none"
+                    style={{ top: '35%', left: '50%', marginLeft: '-8px', color: '#daaa77' }}
+                    initial={{ opacity: 0, x: 0, y: 0, scale: 0, rotate: 0 }}
+                    animate={{
+                      opacity: [0, 1, 1, 0],
+                      x: h.x,
+                      y: h.y,
+                      scale: [0, 1.3, 1, 0],
+                      rotate: h.rotate,
+                    }}
+                    transition={{ duration: 3.0, delay: h.delay, ease: 'easeOut' }}
+                  >
+                    ♥
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
             {/* Envelope Front (Left, Right, Bottom) */}
             <div 
               className="absolute inset-0 bg-[#63262f] rounded-md shadow-[0_-2px_10px_rgba(0,0,0,0.1)]"
@@ -310,28 +406,40 @@ function App() {
               <div className="absolute inset-0 border-2 border-black/5 rounded-md pointer-events-none"></div>
             </div>
 
-            {/* Envelope Top Flap */}
-            <motion.div 
-              className="absolute top-0 left-0 w-full h-[60%] bg-burgundy"
-              style={{ 
-                clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
-                transformOrigin: 'top center',
-                zIndex: 20
+            {/* Envelope Top Flap
+                 Perspective is on this direct parent — gives true 3D depth to rotateX */}
+            <div
+              style={{
+                position: 'absolute', top: 0, left: 0,
+                width: '100%', height: '60%',
+                perspective: '250px',
+                perspectiveOrigin: 'top center',
+                zIndex: isOpening || isOpen ? 2 : 20,
               }}
-              initial={{ rotateX: 0 }}
-              animate={isOpening || isOpen ? { rotateX: -180, zIndex: 2 } : { rotateX: 0, zIndex: 20 }}
-              transition={{ duration: 2.5, ease: 'easeInOut' }}
             >
-              {/* Flap details */}
-              <motion.div 
-                className="absolute top-4 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-[1.5px] border-[#daaa77] bg-[#4a1c22] flex items-center justify-center"
-                initial={{ opacity: 1 }}
-                animate={isOpening || isOpen ? { opacity: 0 } : { opacity: 1 }}
-                transition={{ duration: 0.1, delay: 0 }}
+              <motion.div
+                className="absolute inset-0 bg-burgundy"
+                style={{
+                  clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
+                  transformOrigin: 'top center',
+                }}
+                animate={isOpening || isOpen ? { rotateX: -180 } : { rotateX: 0 }}
+                transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1], delay: 0.25 }}
               >
-                 <span className="text-[#daaa77] text-xs font-serif font-bold tracking-widest mt-1">{content.groomName?.[0]}<span className="mx-[1px]">&</span>{content.brideName?.[0]}</span>
+                {/* Wax seal — pops and spins as the flap unfolds */}
+                <motion.div
+                  className="absolute top-4 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-[1.5px] border-[#daaa77] bg-[#4a1c22] flex items-center justify-center"
+                  animate={
+                    isOpening || isOpen
+                      ? { opacity: 0, scale: 1.6, rotate: 30 }
+                      : { opacity: 1, scale: 1,   rotate: 0  }
+                  }
+                  transition={{ duration: 0.45, delay: 0.1, ease: 'easeIn' }}
+                >
+                  <span className="text-[#daaa77] text-xs font-serif font-bold tracking-widest mt-1">{content.groomName?.[0]}<span className="mx-[1px]">&</span>{content.brideName?.[0]}</span>
+                </motion.div>
               </motion.div>
-            </motion.div>
+            </div>
           </motion.div>
           
           <div className="mt-16 text-white/80 font-sans tracking-widest text-sm">
