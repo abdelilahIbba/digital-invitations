@@ -20,6 +20,11 @@ async function getContent(): Promise<any> {
   return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 }
 
+// Increase body limit for large payloads
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -33,14 +38,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const data = await getContent();
       return res.json(data);
     } catch (err) {
-      console.error('GET /api/content error:', err);
-      return res.status(500).json({ error: 'Failed to read content' });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('GET /api/content error:', msg);
+      return res.status(500).json({ error: 'Failed to read content', details: msg });
     }
   }
 
   // POST — persist new content to Vercel Blob
   if (req.method === 'POST') {
     try {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN is not set in environment variables' });
+      }
+
       // Remove the previous blob so we don't accumulate versions
       const { blobs } = await list({ prefix: BLOB_KEY });
       if (blobs.length > 0) {
@@ -55,8 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.json({ success: true });
     } catch (err) {
-      console.error('POST /api/content error:', err);
-      return res.status(500).json({ error: 'Failed to save content' });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('POST /api/content error:', msg);
+      return res.status(500).json({ error: 'Failed to save content', details: msg });
     }
   }
 
