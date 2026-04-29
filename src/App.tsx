@@ -105,6 +105,7 @@ function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const spotifyApiRef = useRef<any>(null);      // stores IFrameAPI once ready
   const spotifyControllerRef = useRef<any>(null);
+  const contentRef = useRef<any>(null);
   const envelopeControls = useAnimation();
 
   // Start the envelope idle float animation
@@ -114,6 +115,21 @@ function App() {
       { duration: 3, ease: 'easeInOut', repeat: Infinity }
     );
   }, [envelopeControls]);
+
+  // Setup Spotify controller with the correct content URL as soon as both (API & Content) are ready
+  const setupSpotify = (url: string | undefined) => {
+    if (!spotifyApiRef.current || spotifyControllerRef.current) return;
+    const container = document.getElementById('spotify-embed-container');
+    if (!container) return;
+    
+    spotifyApiRef.current.createController(
+      container,
+      { uri: toSpotifyUri(url), width: '300', height: '80', theme: '0' },
+      (controller: any) => {
+        spotifyControllerRef.current = controller;
+      }
+    );
+  };
 
   // Eagerly load the Spotify script on mount so the API is ready before the user clicks.
   // Also inject CSS + a MutationObserver to suppress the promo bar Spotify injects into <body>.
@@ -147,10 +163,12 @@ function App() {
     });
     observer.observe(document.body, { childList: true });
 
-    // Store IFrameAPI reference when it becomes ready.
-    // Delaying controller creation until user click solves strict Safari/iOS & Chrome autoplay blocks
+    // Store IFrameAPI reference when it becomes ready and setup player if content is already fetched
     window.onSpotifyIframeApiReady = (IFrameAPI: any) => {
       spotifyApiRef.current = IFrameAPI;
+      if (contentRef.current) {
+        setupSpotify(contentRef.current.musicUrl);
+      }
     };
 
     if (!document.getElementById('spotify-iframe-api')) {
@@ -164,49 +182,6 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
-  /** Called within the envelope click handler (user gesture) — plays the controller. */
-  const initSpotify = (uri: string) => {
-    if (!spotifyApiRef.current) return;
-
-    if (!spotifyControllerRef.current) {
-      const container = document.getElementById('spotify-embed-container');
-      if (container) {
-        // Create full controller directly during click event user gesture
-        spotifyApiRef.current.createController(
-          container,
-          { uri: uri || 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO', width: '300', height: '80', theme: '0' },
-          (controller: any) => {
-            spotifyControllerRef.current = controller;
-            controller.addListener('ready', () => {
-              controller.play();
-              setIsPlaying(true);
-            });
-            // Brute force play fallback
-            setTimeout(() => {
-              controller.play();
-              setIsPlaying(true);
-            }, 1500);
-          }
-        );
-      }
-    } else {
-      const play = () => {
-        spotifyControllerRef.current.play();
-        setIsPlaying(true);
-      };
-
-      const isCustomUri = uri && uri !== 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO';
-      if (isCustomUri) {
-        spotifyControllerRef.current.loadUri(uri);
-        spotifyControllerRef.current.addListener('ready', play);
-        setTimeout(play, 1500);
-      } else {
-        play();
-      }
-    }
-  };
-
-
   const [guestName, setGuestName] = useState<string | null>(null);
   const [content, setContent] = useState<any>(null);
 
@@ -218,7 +193,11 @@ function App() {
     }
     fetch('/api/content')
       .then(res => res.json())
-      .then(data => setContent(data))
+      .then(data => {
+        setContent(data);
+        contentRef.current = data;
+        setupSpotify(data.musicUrl);
+      })
       .catch(err => console.error("Could not load content", err));
   }, []);
 
@@ -305,7 +284,10 @@ function App() {
               setIsOpening(true);
               // Use Spotify embed for music; fall back to <audio> for plain URLs
               if (!content?.musicUrl || content.musicUrl.includes('spotify') || content.musicUrl === '') {
-                initSpotify(toSpotifyUri(content?.musicUrl));
+                if (spotifyControllerRef.current) {
+                  spotifyControllerRef.current.play();
+                  setIsPlaying(true);
+                }
               } else {
                 audioRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
               }
