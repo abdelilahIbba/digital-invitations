@@ -10,7 +10,9 @@ async function getContent(): Promise<any> {
   try {
     const { blobs } = await list({ prefix: BLOB_KEY });
     if (blobs.length > 0) {
-      const resp = await fetch(blobs[0].url);
+      const resp = await fetch(blobs[0].url, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+      });
       if (!resp.ok) throw new Error(`Blob fetch failed: ${resp.status} ${resp.statusText}`);
       return await resp.json();
     }
@@ -61,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await put(BLOB_KEY, JSON.stringify(req.body, null, 2), {
-        access: 'public',
+        access: 'private',
         addRandomSuffix: false,
         contentType: 'application/json',
       });
