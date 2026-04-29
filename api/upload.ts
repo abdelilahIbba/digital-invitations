@@ -47,6 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ filePath: blob.url });
   } catch (err) {
     console.error('POST /api/upload error:', err);
-    return res.status(500).json({ error: 'Upload failed' });
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: 'Upload failed', details: msg });
   }
 }
