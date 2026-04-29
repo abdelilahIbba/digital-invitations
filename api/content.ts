@@ -10,7 +10,10 @@ async function getContent(): Promise<any> {
   try {
     const { blobs } = await list({ prefix: BLOB_KEY });
     if (blobs.length > 0) {
-      const resp = await fetch(blobs[0].url);
+      // Pass auth token — required for private blob stores
+      const resp = await fetch(blobs[0].url, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+      });
       return await resp.json();
     }
   } catch {}
