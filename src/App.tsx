@@ -147,19 +147,10 @@ function App() {
     });
     observer.observe(document.body, { childList: true });
 
-    // Store IFrameAPI reference when it becomes ready and create controller immediately
+    // Store IFrameAPI reference when it becomes ready.
+    // Delaying controller creation until user click solves strict Safari/iOS & Chrome autoplay blocks
     window.onSpotifyIframeApiReady = (IFrameAPI: any) => {
       spotifyApiRef.current = IFrameAPI;
-      const container = document.getElementById('spotify-embed-container');
-      if (container) {
-        IFrameAPI.createController(
-          container,
-          { uri: 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO', width: '300', height: '80', theme: '0' },
-          (controller: any) => {
-            spotifyControllerRef.current = controller;
-          }
-        );
-      }
     };
 
     if (!document.getElementById('spotify-iframe-api')) {
@@ -175,18 +166,40 @@ function App() {
 
   /** Called within the envelope click handler (user gesture) — plays the controller. */
   const initSpotify = (uri: string) => {
-    const play = () => {
-      spotifyControllerRef.current.play();
-      setIsPlaying(true);
-    };
+    if (!spotifyApiRef.current) return;
 
-    if (spotifyControllerRef.current) {
+    if (!spotifyControllerRef.current) {
+      const container = document.getElementById('spotify-embed-container');
+      if (container) {
+        // Create full controller directly during click event user gesture
+        spotifyApiRef.current.createController(
+          container,
+          { uri: uri || 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO', width: '300', height: '80', theme: '0' },
+          (controller: any) => {
+            spotifyControllerRef.current = controller;
+            controller.addListener('ready', () => {
+              controller.play();
+              setIsPlaying(true);
+            });
+            // Brute force play fallback
+            setTimeout(() => {
+              controller.play();
+              setIsPlaying(true);
+            }, 1500);
+          }
+        );
+      }
+    } else {
+      const play = () => {
+        spotifyControllerRef.current.play();
+        setIsPlaying(true);
+      };
+
       const isCustomUri = uri && uri !== 'spotify:playlist:37i9dQZF1DX4sWSpwq3LiO';
       if (isCustomUri) {
         spotifyControllerRef.current.loadUri(uri);
-        // Wait for URI to load before playing
         spotifyControllerRef.current.addListener('ready', play);
-        setTimeout(play, 1500); // fallback if ready event fails
+        setTimeout(play, 1500);
       } else {
         play();
       }
