@@ -23,17 +23,21 @@ export default function UpdateCrud() {
   };
 
   const handleImageUpload = async (key: string, file: File) => {
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
       const res = await fetch('/api/upload', {
         method: 'POST',
-        body: formData,
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'image/jpeg',
+          'X-Filename': encodeURIComponent(file.name),
+        },
       });
       const result = await res.json();
       if (result.filePath) {
         handleChange(key, result.filePath);
+      } else {
+        console.error('Upload error:', result);
+        alert(`Échec de l'upload: ${result.details || result.error}`);
       }
     } catch (e) {
       console.error("Failed to upload image", e);

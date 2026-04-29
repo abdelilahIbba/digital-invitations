@@ -1,9 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
-import formidable from 'formidable';
-import fs from 'fs';
 
-// Disable Vercel's default body parser so formidable can parse the multipart stream
+// Disable Vercel's default body parser — we stream the raw file body directly to blob
 export const config = {
   api: { bodyParser: false },
 };
@@ -11,7 +9,7 @@ export const config = {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Filename');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -19,30 +17,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const form = formidable({ multiples: false });
-
   try {
-    const [, files] = await form.parse(req as any);
-    const fileArr = files.image;
-
-    if (!fileArr || fileArr.length === 0) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const file = fileArr[0];
-    const buffer = fs.readFileSync(file.filepath);
+    const contentType = (req.headers['content-type'] as string) || 'image/jpeg';
+    const rawFilename = req.headers['x-filename'] as string | undefined;
+    const filename = rawFilename ? decodeURIComponent(rawFilename) : `upload-${Date.now()}`;
 
     const blob = await put(
-      `images/${Date.now()}-${file.originalFilename ?? 'upload'}`,
-      buffer,
+      `images/${Date.now()}-${filename}`,
+      req, // IncomingMessage is a Readable stream — accepted directly by @vercel/blob
       {
         access: 'public',
-        contentType: file.mimetype ?? 'image/jpeg',
+        contentType,
       }
     );
-
-    // Clean up the temp file from /tmp
-    try { fs.unlinkSync(file.filepath); } catch {}
 
     return res.json({ filePath: blob.url });
   } catch (err) {
