@@ -4,7 +4,7 @@
  */
 
 import { AnimatePresence, motion, useAnimation } from 'motion/react';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Heart,
   MapPin,
@@ -27,63 +27,66 @@ const FloralBorder = ({ className = '', flip = false, src }: { className?: strin
   />
 );
 
-type RevealDirection = 'up' | 'left' | 'right' | 'none';
-const Reveal = ({ children, className = '', delay = 0, direction = 'up' }: { children: React.ReactNode; className?: string; delay?: number; direction?: RevealDirection }) => {
+type RevealDirection = 'up' | 'down' | 'left' | 'right' | 'none';
+const Reveal = ({ children, className = '', delay = 0, direction = 'up', distance = 36 }: { children: React.ReactNode; className?: string; delay?: number; direction?: RevealDirection; distance?: number }) => {
   const initial =
-    direction === 'up'    ? { opacity: 0, y: 36 } :
-    direction === 'left'  ? { opacity: 0, x: -36 } :
-    direction === 'right' ? { opacity: 0, x: 36 } :
+    direction === 'up'    ? { opacity: 0, y:  distance } :
+    direction === 'down'  ? { opacity: 0, y: -distance } :
+    direction === 'left'  ? { opacity: 0, x: -distance } :
+    direction === 'right' ? { opacity: 0, x:  distance } :
                             { opacity: 0 };
-  const animate = direction === 'up' ? { opacity: 1, y: 0 } :
-                  direction === 'left' || direction === 'right' ? { opacity: 1, x: 0 } :
-                  { opacity: 1 };
+  const animate =
+    direction === 'left' || direction === 'right' ? { opacity: 1, x: 0 } :
+    direction === 'up'   || direction === 'down'  ? { opacity: 1, y: 0 } :
+    { opacity: 1 };
   return (
     <motion.div
       className={className}
       initial={initial}
       whileInView={animate}
       viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1], delay }}
+      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay }}
     >
       {children}
     </motion.div>
   );
 };
 
+/** Animated thin horizontal rule that grows from center */
+const GoldLine = ({ delay = 0 }: { delay?: number }) => (
+  <motion.div
+    className="h-[1px] bg-gradient-to-r from-transparent via-[#daaa77] to-transparent"
+    initial={{ scaleX: 0, opacity: 0 }}
+    whileInView={{ scaleX: 1, opacity: 1 }}
+    viewport={{ once: true, margin: '-60px' }}
+    transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay }}
+    style={{ transformOrigin: 'center' }}
+  />
+);
+
+/** Animated sound-wave bars */
+const SoundWave = ({ active }: { active: boolean }) => (
+  <div className="flex items-end gap-[3px] h-5 mb-0">
+    {[0.5, 1, 0.7, 1.2, 0.4, 1, 0.8].map((h, i) => (
+      <motion.span
+        key={i}
+        className="w-[3px] rounded-full bg-white/70 origin-bottom"
+        animate={active
+          ? { scaleY: [h * 0.4, h, h * 0.6, h * 1.2, h * 0.5, h], opacity: [0.6, 1, 0.7, 1, 0.6, 1] }
+          : { scaleY: 0.2, opacity: 0.3 }}
+        transition={{ duration: 0.9 + i * 0.08, repeat: Infinity, ease: 'easeInOut', delay: i * 0.09 }}
+        style={{ height: '20px' }}
+      />
+    ))}
+  </div>
+);
+
 function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const iframeReady = useRef(false);
-  const pendingPlay = useRef(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const envelopeControls = useAnimation();
-
-  const sendYTCommand = useCallback((cmd: string, args: any[] = []) => {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: cmd, args }),
-      '*'
-    );
-  }, []);
-
-  // Listen for YouTube player ready event
-  useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data?.event === 'onReady' || data?.info !== undefined) {
-          iframeReady.current = true;
-          if (pendingPlay.current) {
-            pendingPlay.current = false;
-            sendYTCommand('unMute');
-            sendYTCommand('setVolume', [100]);
-          }
-        }
-      } catch {}
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [sendYTCommand]);
 
   // Start the envelope idle float animation
   useEffect(() => {
@@ -93,17 +96,7 @@ function App() {
     );
   }, [envelopeControls]);
 
-  const getYouTubeVideoId = (url: string): string | null => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|music\.youtube\.com\/watch\?v=)([^&\s?#]+)/,
-      /youtube\.com\/embed\/([^&\s?#]+)/,
-    ];
-    for (const p of patterns) {
-      const m = url.match(p);
-      if (m) return m[1];
-    }
-    return null;
-  };
+
   const [guestName, setGuestName] = useState<string | null>(null);
   const [content, setContent] = useState<any>(null);
 
@@ -201,12 +194,7 @@ function App() {
             if (!isOpening && !isOpen) {
               setIsOpening(true);
               setIsPlaying(true);
-              if (iframeReady.current) {
-                sendYTCommand('unMute');
-                sendYTCommand('setVolume', [100]);
-              } else {
-                pendingPlay.current = true;
-              }
+              audioRef.current?.play().catch(() => {});
               // Shake the envelope then scale it up as it opens
               envelopeControls.stop();
               envelopeControls.start(
@@ -223,9 +211,24 @@ function App() {
           }}
         >
           <div className="text-center text-white mb-12 px-4">
-            <h1 className="font-cursive text-6xl sm:text-8xl mb-2 leading-none">{content.groomName}</h1>
-            <p className="font-serif text-2xl sm:text-3xl italic mb-2">&</p>
-            <h1 className="font-cursive text-6xl sm:text-8xl leading-none">{content.brideName}</h1>
+            <motion.h1
+              className="font-cursive text-6xl sm:text-8xl mb-2 leading-none"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+            >{content.groomName}</motion.h1>
+            <motion.p
+              className="font-serif text-2xl sm:text-3xl italic mb-2"
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, ease: 'backOut', delay: 0.55 }}
+            >&</motion.p>
+            <motion.h1
+              className="font-cursive text-6xl sm:text-8xl leading-none"
+              initial={{ opacity: 0, y: -24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.4 }}
+            >{content.brideName}</motion.h1>
           </div>
           
           <motion.div 
@@ -289,8 +292,8 @@ function App() {
             {isOpening && (
               <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 6 }}>
                 {[
-                  { id: 1, content: `Bonjour ${guestName ? guestName.split(' ')[0] : 'Invité'} !`, endX: -70, endY: -220, rotate: -15, delay: 2.5 },
-                  { id: 2, content: `Rejoignez-nous pour célébrer !`, endX: 80, endY: -160, rotate: 10, delay: 4.0 },
+                  { id: 1, content: (content.envelopeMsg1 || 'Bonjour {guest} !').replace('{guest}', guestName ? guestName.split(' ')[0] : 'Invité'), endX: -70, endY: -220, rotate: -15, delay: 2.5 },
+                  { id: 2, content: content.envelopeMsg2 || 'Rejoignez-nous pour célébrer !', endX: 80, endY: -160, rotate: 10, delay: 4.0 },
                 ].map((msg) => (
                   <motion.div
                     key={msg.id}
@@ -442,99 +445,207 @@ function App() {
             </div>
           </motion.div>
           
-          <div className="mt-16 text-white/80 font-sans tracking-widest text-sm">
-            {heroDateText}
-          </div>
+          <motion.div
+            className="mt-16 font-sans tracking-widest text-sm flex flex-col items-center gap-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8, duration: 1 }}
+          >
+            <span className="text-white/80">{heroDateText}</span>
+            <motion.div
+              className="h-[1px] bg-gradient-to-r from-transparent via-[#daaa77] to-transparent w-32"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ delay: 1.1, duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'center' }}
+            />
+            <AnimatePresence>
+              {!isOpening && !isOpen && (
+                <motion.span
+                  key="prompt"
+                  className="text-[#daaa77]/80 text-xs tracking-[0.25em] uppercase mt-2"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: [0, 1, 0.6, 1], y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 0.8, ease: 'easeInOut', delay: 1.5 }}
+                >
+                  Appuyez pour ouvrir
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </motion.div>
 
-        {/* Hidden YouTube iframe — must stay outside isOpen guard so it exists on first click */}
-        {content?.musicUrl && (() => {
-          const videoId = getYouTubeVideoId(content.musicUrl);
-          if (!videoId) return null;
-          return (
-            <iframe
-              ref={iframeRef}
-              className="absolute w-0 h-0 pointer-events-none"
-              src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&loop=1&playlist=${videoId}&controls=0&mute=1`}
-              allow="autoplay"
-              title="background-music"
-            />
-          );
-        })()}
+        {/* Hidden audio element for background music */}
+        {content?.musicUrl && (
+          <audio
+            ref={audioRef}
+            src={content.musicUrl}
+            loop
+            preload="auto"
+            className="hidden"
+          />
+        )}
 
         {/* Content Section */}
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 50 }}
+            initial={{ opacity: 0, y: 60 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.2, ease: 'easeOut' }}
+            transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
             className="bg-paper flex flex-col items-center pb-20 w-full shrink-0"
           >
             {/* Top image/border space */}
             <FloralBorder src={content.floralImage} />
           
-          <div className="px-8 text-center mt-6">
+          <div className="px-8 text-center mt-8 w-full">
+            <GoldLine delay={0.2} />
+            <div className="py-8">
             <Reveal delay={0.1}>
-              <p className="font-serif italic text-burgundy text-lg leading-relaxed mb-6">
-                "{content.bibleVerse}"<br/>
-                <span className="text-sm font-sans block mt-2">{content.bibleVerseRef}</span>
+              <p className="font-serif italic text-burgundy text-lg leading-relaxed mb-3">
+                “{content.bibleVerse}”
               </p>
+              <p className="text-sm font-sans text-burgundy/60 tracking-wider">{content.bibleVerseRef}</p>
             </Reveal>
+            </div>
+            <GoldLine delay={0.3} />
             
-            <Reveal delay={0.2}>
-              <div className="flex items-center justify-center gap-4 my-8">
-                <span className="font-serif text-5xl text-burgundy">{content.groomName ? content.groomName[0] : 'M'}</span>
-                <div className="w-[1px] h-12 bg-burgundy"></div>
-                <span className="font-serif text-5xl text-burgundy">{content.brideName ? content.brideName[0] : 'M'}</span>
+            <Reveal delay={0.15} className="py-10">
+              <div className="flex items-center justify-center gap-6 my-2">
+                <motion.span
+                  className="font-serif text-5xl text-burgundy"
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+                >{content.groomName ? content.groomName[0] : 'M'}</motion.span>
+                <motion.div
+                  className="w-[1px] bg-gradient-to-b from-transparent via-burgundy to-transparent"
+                  initial={{ height: 0 }}
+                  whileInView={{ height: 48 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                />
+                <motion.span
+                  className="font-serif text-5xl text-burgundy"
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+                >{content.brideName ? content.brideName[0] : 'M'}</motion.span>
               </div>
             </Reveal>
-            
-            <Reveal delay={0.1}>
-              <h2 className="font-sans tracking-[0.2em] text-sm text-burgundy/80 font-medium mb-12">
+
+            <GoldLine delay={0.1} />
+            <Reveal delay={0.1} className="py-6">
+              <h2 className="font-sans tracking-[0.3em] text-xs text-burgundy/70 font-medium">
                 NOUS NOUS MARIONS !
               </h2>
             </Reveal>
+            <GoldLine delay={0.15} />
             
-            <Reveal direction="none" delay={0}>
-              <motion.img
-                src={content.huggingImage}
-                alt="Couple hugging"
-                className="w-full aspect-[4/5] object-cover bg-neutral-200"
-                initial={{ opacity: 0, scale: 1.04 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+            {/* Hugging image — wipe reveal from bottom + corner ornaments + caption */}
+            <div className="mt-10 relative w-full">
+              {/* Top-left corner bracket */}
+              <div className="absolute -top-3 -left-3 w-12 h-12 pointer-events-none z-10">
+                <motion.svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
+                  <motion.path d="M 46 2 L 2 2 L 2 46" stroke="#daaa77" strokeWidth="1.5" strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    whileInView={{ pathLength: 1, opacity: 0.85 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.0, delay: 1.1, ease: 'easeOut' }}
+                  />
+                </motion.svg>
+              </div>
+              {/* Bottom-right corner bracket */}
+              <div className="absolute -bottom-3 -right-3 w-12 h-12 pointer-events-none z-10">
+                <motion.svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
+                  <motion.path d="M 2 46 L 46 46 L 46 2" stroke="#daaa77" strokeWidth="1.5" strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    whileInView={{ pathLength: 1, opacity: 0.85 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.0, delay: 1.3, ease: 'easeOut' }}
+                  />
+                </motion.svg>
+              </div>
+
+              {/* Clip-path wipe: curtain lifts from bottom upward */}
+              <motion.div
+                className="relative w-full overflow-hidden bg-neutral-200"
+                style={{ aspectRatio: '4/5' }}
+                initial={{ clipPath: 'inset(100% 0 0 0)' }}
+                whileInView={{ clipPath: 'inset(0% 0 0 0)' }}
                 viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </Reveal>
+                transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <motion.img
+                  src={content.huggingImage}
+                  alt="Couple hugging"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  initial={{ scale: 1.14 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }}
+                />
+                {/* Warm bottom gradient */}
+                <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#3d1820]/55 to-transparent pointer-events-none" />
+                {/* Caption slide up */}
+                <motion.div
+                  className="absolute bottom-5 w-full text-center"
+                  initial={{ opacity: 0, y: 18 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.9, delay: 1.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <p className="font-cursive text-2xl text-white/90 drop-shadow-lg">
+                    {content.groomName} &amp; {content.brideName}
+                  </p>
+                </motion.div>
+              </motion.div>
+            </div>
           </div>
 
           <FloralBorder className="mt-8 opacity-60" flip src={content.floralImage} />
 
           {/* Music and Parents Section */}
-          <div className="bg-burgundy w-full py-16 text-white text-center flex flex-col items-center relative">
-            <Reveal><p className="font-serif italic text-lg mb-6">Écoutez notre chanson</p></Reveal>
+          <div className="bg-burgundy w-full py-16 text-white text-center flex flex-col items-center relative overflow-hidden">
+            {/* Subtle radial glow in background */}
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(218,170,119,0.12) 0%, transparent 70%)' }} />
+
+            <Reveal><p className="font-serif italic text-lg mb-3">Écoutez notre chanson</p></Reveal>
+            <Reveal delay={0.05}><div className="mb-6"><SoundWave active={isPlaying} /></div></Reveal>
             
-            <Reveal delay={0.1}><div className="flex items-center justify-center gap-6 mb-16">
-              <Shuffle className="w-4 h-4 opacity-70 cursor-pointer" />
-              <SkipBack className="w-5 h-5 cursor-pointer" />
-              <button 
-                className="w-12 h-12 rounded-full border border-white flex items-center justify-center hover:bg-white/10 transition-colors"
-                onClick={() => {
-                  if (isPlaying) {
-                    sendYTCommand('pauseVideo');
-                  } else {
-                    sendYTCommand('playVideo');
-                    sendYTCommand('unMute');
-                    sendYTCommand('setVolume', [100]);
-                  }
-                  setIsPlaying(prev => !prev);
-                }}
-              >
-                {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
-              </button>
-              <SkipForward className="w-5 h-5 cursor-pointer" />
-              <Repeat className="w-4 h-4 opacity-70 cursor-pointer" />
-            </div></Reveal>
+            <Reveal delay={0.1}>
+              <div className="flex items-center justify-center gap-6 mb-14">
+                <Shuffle className="w-4 h-4 opacity-40 cursor-pointer" />
+                <SkipBack className="w-5 h-5 opacity-70 cursor-pointer hover:opacity-100 transition-opacity" />
+                {/* Pulsing ring around play button */}
+                <div className="relative">
+                  {isPlaying && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full border border-white/50"
+                      animate={{ scale: [1, 1.7], opacity: [0.6, 0] }}
+                      transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
+                    />
+                  )}
+                  <button 
+                    className="relative w-12 h-12 rounded-full border border-white flex items-center justify-center hover:bg-white/10 transition-colors z-10"
+                    onClick={() => {
+                      if (isPlaying) {
+                        audioRef.current?.pause();
+                      } else {
+                        audioRef.current?.play().catch(() => {});
+                      }
+                      setIsPlaying(prev => !prev);
+                    }}
+                  >
+                    {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
+                  </button>
+                </div>
+                <SkipForward className="w-5 h-5 opacity-70 cursor-pointer hover:opacity-100 transition-opacity" />
+                <Repeat className="w-4 h-4 opacity-40 cursor-pointer" />
+              </div>
+            </Reveal>
 
             <Reveal delay={0.1}><p className="font-serif text-lg leading-relaxed px-8 mb-10">
               Avec l'amour qui nous unit, la bénédiction<br/>
@@ -546,88 +657,161 @@ function App() {
                 <p>{content.groomMother}</p>
                 <p>{content.groomFather}</p>
               </div>
-              <p className="text-xl">&</p>
+              <motion.p
+                className="text-xl"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+              >&</motion.p>
               <div>
                 <p>{content.brideMother}</p>
                 <p>{content.brideFather}</p>
               </div>
             </div></Reveal>
 
-            <Reveal delay={0.1}><p className="font-sans text-xs uppercase tracking-widest mt-12 px-8 leading-loose opacity-80">
+            <Reveal delay={0.1}><p className="font-sans text-xs uppercase tracking-widest mt-12 px-8 leading-loose opacity-70">
               Nous unirons nos vies par le<br/>
               sacrement du mariage
             </p></Reveal>
           </div>
 
           {/* Countdown Section */}
-          <Reveal direction="none" className="w-full">
-          <div className="bg-[#4a1c22] w-full py-12 text-white border-b border-white/10">
+          <div className="bg-[#4a1c22] w-full py-14 text-white border-b border-white/10 overflow-hidden">
             <div className="flex flex-col items-center text-center">
-              <p className="font-sans tracking-widest text-xs uppercase mb-4 opacity-80">{uiMonth}</p>
-              <div className="flex items-center justify-center gap-4 sm:gap-6 w-full px-6 sm:px-12 mb-10">
-                <span className="font-sans text-xs uppercase tracking-wider w-1/4 text-right">{uiDayName}</span>
-                <span className="font-serif text-5xl sm:text-6xl italic border-y border-white/20 py-2 w-1/2">{uiDay}</span>
-                <span className="font-sans text-xs tracking-wider w-1/4 text-left">{uiYear}</span>
-              </div>
+              <Reveal direction="none">
+                <p className="font-sans tracking-[0.3em] text-xs uppercase mb-5 opacity-60">{uiMonth}</p>
+              </Reveal>
+              <Reveal delay={0.05}>
+                <div className="flex items-center justify-center gap-4 sm:gap-6 w-full px-6 sm:px-12 mb-10">
+                  <span className="font-sans text-xs uppercase tracking-wider w-1/4 text-right opacity-70">{uiDayName}</span>
+                  <span className="font-serif text-5xl sm:text-6xl italic border-y border-white/20 py-2 w-1/2">{uiDay}</span>
+                  <span className="font-sans text-xs tracking-wider w-1/4 text-left opacity-70">{uiYear}</span>
+                </div>
+              </Reveal>
               
-              <p className="font-sans tracking-widest text-xs uppercase mb-6">Il reste</p>
+              <Reveal direction="none" delay={0.1}><GoldLine /></Reveal>
+              <Reveal direction="none" delay={0.15}><p className="font-sans tracking-widest text-xs uppercase my-5 opacity-60">Il reste</p></Reveal>
+              <Reveal direction="none" delay={0.1}><GoldLine /></Reveal>
               
-              <div className="flex justify-center gap-3 sm:gap-6 font-serif text-3xl sm:text-4xl mb-2">
-                <div className="flex flex-col items-center">
-                  <span>{String(timeLeft.days).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Jours</span>
-                </div>
-                <span>:</span>
-                <div className="flex flex-col items-center">
-                  <span>{String(timeLeft.hours).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Heures</span>
-                </div>
-                <span>:</span>
-                <div className="flex flex-col items-center">
-                  <span>{String(timeLeft.minutes).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Min</span>
-                </div>
-                <span>:</span>
-                <div className="flex flex-col items-center">
-                  <span>{String(timeLeft.seconds).padStart(2, '0')}</span>
-                  <span className="font-sans text-[10px] tracking-wider uppercase mt-1 opacity-70">Sec</span>
-                </div>
+              <div className="flex justify-center gap-3 sm:gap-6 font-serif text-3xl sm:text-4xl mt-8 mb-2">
+                {[
+                  { value: timeLeft.days,    label: 'Jours' },
+                  { value: timeLeft.hours,   label: 'Heures' },
+                  { value: timeLeft.minutes, label: 'Min' },
+                  { value: timeLeft.seconds, label: 'Sec' },
+                ].map((unit, idx) => (
+                  <React.Fragment key={unit.label}>
+                    {idx > 0 && <span className="opacity-40 self-start mt-1">:</span>}
+                    <motion.div
+                      className="flex flex-col items-center min-w-[3ch]"
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.6, delay: 0.2 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <span>{String(unit.value).padStart(2, '0')}</span>
+                      <span className="font-sans text-[9px] tracking-wider uppercase mt-1 opacity-50">{unit.label}</span>
+                    </motion.div>
+                  </React.Fragment>
+                ))}
               </div>
             </div>
           </div>
-          </Reveal>
 
           <FloralBorder src={content.floralImage} />
 
           {/* Location & Itinerary */}
           <div className="w-full px-8 flex flex-col items-center mt-8">
-            <Reveal direction="none">
-              <motion.img
-                src={content.outdoorImage}
-                alt="Couple outdoor walking"
-                className="w-full aspect-[4/5] object-cover mb-16"
-                initial={{ opacity: 0, scale: 1.04 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+            {/* Outdoor image — wipe reveal left-to-right + shimmer sweep + corner ornaments */}
+            <div className="relative w-full mb-16">
+              {/* Top-right corner bracket */}
+              <div className="absolute -top-3 -right-3 w-12 h-12 pointer-events-none z-10">
+                <motion.svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
+                  <motion.path d="M 2 2 L 46 2 L 46 46" stroke="#daaa77" strokeWidth="1.5" strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    whileInView={{ pathLength: 1, opacity: 0.85 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.0, delay: 1.1, ease: 'easeOut' }}
+                  />
+                </motion.svg>
+              </div>
+              {/* Bottom-left corner bracket */}
+              <div className="absolute -bottom-3 -left-3 w-12 h-12 pointer-events-none z-10">
+                <motion.svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
+                  <motion.path d="M 2 2 L 2 46 L 46 46" stroke="#daaa77" strokeWidth="1.5" strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    whileInView={{ pathLength: 1, opacity: 0.85 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.0, delay: 1.3, ease: 'easeOut' }}
+                  />
+                </motion.svg>
+              </div>
+
+              {/* Clip-path wipe: curtain slides from right edge leftward */}
+              <motion.div
+                className="relative w-full overflow-hidden bg-neutral-200"
+                style={{ aspectRatio: '4/5' }}
+                initial={{ clipPath: 'inset(0 100% 0 0)' }}
+                whileInView={{ clipPath: 'inset(0 0% 0 0)' }}
                 viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </Reveal>
+                transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <motion.img
+                  src={content.outdoorImage}
+                  alt="Couple outdoor walking"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  initial={{ scale: 1.14 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }}
+                />
+                {/* Shimmer sweep — fires once after image appears */}
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: 'linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.22) 50%, transparent 65%)' }}
+                  initial={{ x: '-120%' }}
+                  whileInView={{ x: '160%' }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1.1, delay: 1.15, ease: 'easeInOut' }}
+                />
+                {/* Subtle vignette */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#3d1820]/35 pointer-events-none" />
+              </motion.div>
+            </div>
 
             <Reveal><div className="flex flex-col items-center text-center text-burgundy mb-16">
-              <MapPin className="w-10 h-10 stroke-1 mb-4 opacity-80" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5, rotate: -20 }}
+                whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, ease: 'backOut', delay: 0.1 }}
+              >
+                <MapPin className="w-10 h-10 stroke-1 mb-4 opacity-80" />
+              </motion.div>
               <p className="font-serif text-xl mb-2">{uiTime}</p>
-              <h3 className="font-sans font-medium tracking-[0.2em] mb-1">RÉCEPTION</h3>
-              <p className="font-serif text-xl border-b border-burgundy/30 pb-1 mb-2">{content.venueName}</p>
-              <p className="font-sans text-sm opacity-80 mb-6">{content.venueCity}</p>
+              <h3 className="font-sans font-medium tracking-[0.2em] mb-2">RÉCEPTION</h3>
+              <p className="font-serif text-xl mb-1 relative inline-block">
+                {content.venueName}
+                <motion.span
+                  className="absolute bottom-0 left-0 h-[1px] bg-burgundy/40"
+                  initial={{ width: 0 }}
+                  whileInView={{ width: '100%' }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </p>
+              <p className="font-sans text-sm opacity-70 mt-2 mb-6">{content.venueCity}</p>
               
-              <a 
+              <motion.a 
                 href={`https://www.google.com/maps/search/?api=1&query=${content.mapCoordinates || '-17.781617,-63.179379'}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-burgundy text-white font-sans text-sm tracking-wider px-8 py-3 rounded-full hover:bg-[#4a1c22] transition-colors"
+                className="bg-burgundy text-white font-sans text-sm tracking-wider px-8 py-3 rounded-full hover:bg-[#4a1c22] transition-colors inline-block"
+                whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(74,28,34,0.4)' }}
+                whileTap={{ y: 0 }}
+                transition={{ duration: 0.2 }}
               >
                 Voir l'emplacement
-              </a>
+              </motion.a>
             </div></Reveal>
 
             <Reveal><h3 className="font-sans font-medium tracking-[0.1em] text-burgundy text-sm mb-16">ITINÉRAIRE DES ACTIVITÉS</h3></Reveal>
@@ -669,15 +853,20 @@ function App() {
             </div>
 
             <Reveal><div className="flex flex-col items-center text-center text-burgundy w-full mb-8">
-              <h3 className="font-sans font-medium tracking-[0.1em] text-sm mb-4">CODE VESTIMENTAIRE</h3>
-              <p className="font-serif italic text-lg mb-6">{content.dressCode}</p>
+              <h3 className="font-sans font-medium tracking-[0.1em] text-sm mb-3">CODE VESTIMENTAIRE</h3>
+              <p className="font-serif italic text-lg mb-5">{content.dressCode}</p>
               
-              <div className="flex justify-center mb-6">
+              <motion.div
+                initial={{ opacity: 0, rotate: -30, scale: 0.6 }}
+                whileInView={{ opacity: 1, rotate: 0, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8, ease: 'backOut', delay: 0.1 }}
+              >
+                <div className="flex justify-center mb-5">
                 <svg className="w-16 h-16 fill-burgundy" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 2a2 2 0 100 4 2 2 0 000-4zM5.5 7A1.5 1.5 0 004 8.5v4A1.5 1.5 0 005.5 14H6v7.5a.5.5 0 001 0v-7h.5v7a.5.5 0 001 0V14h.5a1.5 1.5 0 001.5-1.5v-4A1.5 1.5 0 009 7H8l-1 2-1-2H5.5zm11.5-5a2 2 0 100 4 2 2 0 000-4zM16 7c-1.38 0-2.5 1.12-2.5 2.5V11c0 1.05.65 1.95 1.57 2.34L13 21.5a.5.5 0 00.91.41L15.39 18l.8 3.55a.5.5 0 00.98-.06l.82-5.74V22.5a.5.5 0 00.95.2l2-6a.5.5 0 00-.95-.32l-1.5 4.5v-5.14c.92-.39 1.57-1.29 1.57-2.34V9.5C18.5 8.12 17.38 7 16 7zm-1 3h2v1h-2v-1z"/>
                 </svg>
-              </div>
-              
+              </div>              </motion.div>              
               <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto pb-4">
                 Avec beaucoup d'affection, nous vous demandons d'éviter les vêtements blancs.
               </p>
@@ -687,33 +876,51 @@ function App() {
           <FloralBorder flip src={content.floralImage} />
 
           {/* Bottom Call to Actions */}
-          <div className="bg-[#4a1c22] w-full py-16 text-white text-center flex flex-col items-center">
-            
-            <Reveal><div className="mb-14">
-              <Gift className="w-8 h-8 stroke-1 mx-auto mb-4" />
+          <div className="bg-[#4a1c22] w-full py-16 text-white text-center flex flex-col items-center overflow-hidden">
+            {/* Ambient top glow */}
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-[#daaa77]/40 to-transparent mb-14" />
+
+            <Reveal><div className="mb-14 px-8">
+              <motion.div
+                initial={{ opacity: 0, y: -12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, ease: 'backOut' }}
+              >
+                <Gift className="w-8 h-8 stroke-1 mx-auto mb-4" />
+              </motion.div>
               <h3 className="font-sans tracking-wide text-sm mb-4">SUGGESTION DE CADEAUX</h3>
-              <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto mb-6">
+              <p className="font-serif text-sm opacity-80 max-w-[80%] mx-auto mb-6">
                 Le meilleur cadeau est votre présence, mais si vous souhaitez nous offrir quelque chose, voici une option :
               </p>
-              <p className="font-sans text-xs tracking-widest uppercase mb-2">Urne nuptiale</p>
+              <p className="font-sans text-xs tracking-widest uppercase mb-2 opacity-60">Urne nuptiale</p>
               <svg className="w-6 h-6 mx-auto stroke-white stroke-1 bg-transparent" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
             </div></Reveal>
 
-            <div className="w-[80%] h-[1px] bg-white/10 mb-14"></div>
+            <div className="w-[80%] h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent mb-14" />
 
             <Reveal delay={0.1}><div className="mb-14 min-w-[80%]">
-              <Hotel className="w-8 h-8 stroke-1 mx-auto mb-4" />
+              <motion.div
+                initial={{ opacity: 0, y: -12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, ease: 'backOut', delay: 0.05 }}
+              >
+                <Hotel className="w-8 h-8 stroke-1 mx-auto mb-4" />
+              </motion.div>
               <h3 className="font-sans tracking-wide text-sm mb-6">SUGGESTION D'HÉBERGEMENT</h3>
               
               {content.hotel1Name && (
                 <div className="mb-6">
                   <p className="font-serif text-lg mb-2">{content.hotel1Name}</p>
                   {content.hotel1Url ? (
-                    <a href={content.hotel1Url} target="_blank" rel="noopener noreferrer" className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
+                    <motion.a href={content.hotel1Url} target="_blank" rel="noopener noreferrer"
+                      className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors inline-block"
+                      whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
                       Plus d'informations
-                    </a>
+                    </motion.a>
                   ) : (
-                    <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans opacity-60 cursor-default">
+                    <button className="border border-white/20 text-white/40 rounded-full px-6 py-1 text-xs font-sans cursor-default">
                       Plus d'informations
                     </button>
                   )}
@@ -723,11 +930,13 @@ function App() {
                 <div>
                   <p className="font-serif text-lg mb-2">{content.hotel2Name}</p>
                   {content.hotel2Url ? (
-                    <a href={content.hotel2Url} target="_blank" rel="noopener noreferrer" className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors">
+                    <motion.a href={content.hotel2Url} target="_blank" rel="noopener noreferrer"
+                      className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans hover:bg-white hover:text-burgundy transition-colors inline-block"
+                      whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
                       Plus d'informations
-                    </a>
+                    </motion.a>
                   ) : (
-                    <button className="border border-white/60 text-white rounded-full px-6 py-1 text-xs font-sans opacity-60 cursor-default">
+                    <button className="border border-white/20 text-white/40 rounded-full px-6 py-1 text-xs font-sans cursor-default">
                       Plus d'informations
                     </button>
                   )}
@@ -735,39 +944,121 @@ function App() {
               )}
             </div></Reveal>
 
-            <div className="w-[80%] h-[1px] bg-white/10 mb-14"></div>
+            <div className="w-[80%] h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent mb-14" />
 
             <Reveal delay={0.1}><div className="mb-16">
-              <Heart className="w-8 h-8 stroke-1 mx-auto mb-4" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, ease: 'backOut', delay: 0.05 }}
+              >
+                <Heart className="w-8 h-8 stroke-1 mx-auto mb-4" />
+              </motion.div>
               <h3 className="font-sans tracking-wide text-sm mb-4">CONFIRMER LA PRÉSENCE</h3>
-              <p className="font-serif text-sm opacity-90 max-w-[80%] mx-auto mb-6">
+              <p className="font-serif text-sm opacity-80 max-w-[80%] mx-auto mb-6">
                 Nous vous remercions de confirmer votre présence avant le {content.rsvpDeadline}
               </p>
-              <button className="border-2 border-white text-white rounded-full px-8 py-2 text-sm font-sans hover:bg-white hover:text-burgundy transition-colors">
+              <motion.button
+                className="border-2 border-white text-white rounded-full px-8 py-2 text-sm font-sans hover:bg-white hover:text-burgundy transition-colors"
+                whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(255,255,255,0.2)' }}
+                whileTap={{ y: 0 }}
+              >
                 Confirmer ici
-              </button>
+              </motion.button>
             </div></Reveal>
 
-            <Reveal delay={0.05}><p className="font-sans text-xs tracking-widest uppercase opacity-80 mb-6">
+            <div className="w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#daaa77]/40 to-transparent mb-10" />
+
+            <Reveal delay={0.05}><p className="font-sans text-xs tracking-widest uppercase opacity-50 mb-6">
               Nous espérons compter sur votre présence
             </p></Reveal>
-            <Reveal delay={0.15}><p className="font-cursive text-4xl sm:text-5xl opacity-90">
-              Merci Beaucoup !
-            </p></Reveal>
+
+            {/* "Merci Beaucoup" with breathing gold glow */}
+            <Reveal delay={0.15}>
+              <div className="relative">
+                <motion.div
+                  className="absolute inset-0 rounded-full blur-2xl bg-[#daaa77]/20"
+                  animate={{ opacity: [0.3, 0.8, 0.3], scale: [0.9, 1.1, 0.9] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.p
+                  className="relative font-cursive text-4xl sm:text-5xl text-[#daaa77]"
+                  animate={{ textShadow: ['0 0 0px #daaa77', '0 0 20px #daaa7780', '0 0 0px #daaa77'] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  Merci Beaucoup !
+                </motion.p>
+              </div>
+            </Reveal>
+
+            <div className="w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#daaa77]/30 to-transparent mt-10" />
           </div>
           
           <FloralBorder src={content.floralImage} />
 
+          {/* Holding-hands image — wipe reveal top-to-bottom + all 4 corners + caption */}
           <div className="w-full px-8 pb-12 flex justify-center -mt-[30px] relative z-10">
-            <motion.img
-              src={content.holdingHandsImage}
-              alt="Couple holding hands"
-              className="w-full aspect-[4/5] object-cover rounded-sm shadow-md"
-              initial={{ opacity: 0, scale: 1.04 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-            />
+            <div className="relative w-full">
+              {/* All four corner brackets */}
+              {([
+                { pos: '-top-3 -left-3',    d: 'M 46 2 L 2 2 L 2 46',   delay: 1.0 },
+                { pos: '-top-3 -right-3',   d: 'M 2 2 L 46 2 L 46 46',  delay: 1.1 },
+                { pos: '-bottom-3 -left-3', d: 'M 2 2 L 2 46 L 46 46',  delay: 1.2 },
+                { pos: '-bottom-3 -right-3',d: 'M 2 46 L 46 46 L 46 2', delay: 1.3 },
+              ] as { pos: string; d: string; delay: number }[]).map((c, i) => (
+                <div key={i} className={`absolute ${c.pos} w-12 h-12 pointer-events-none z-10`}>
+                  <motion.svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
+                    <motion.path d={c.d} stroke="#daaa77" strokeWidth="1.5" strokeLinecap="round"
+                      initial={{ pathLength: 0, opacity: 0 }}
+                      whileInView={{ pathLength: 1, opacity: 0.9 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 1.0, delay: c.delay, ease: 'easeOut' }}
+                    />
+                  </motion.svg>
+                </div>
+              ))}
+
+              {/* Clip-path wipe: curtain drops from top downward */}
+              <motion.div
+                className="relative w-full overflow-hidden rounded-sm bg-neutral-200"
+                style={{ aspectRatio: '4/5' }}
+                initial={{ clipPath: 'inset(0 0 100% 0)' }}
+                whileInView={{ clipPath: 'inset(0 0 0% 0)' }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <motion.img
+                  src={content.holdingHandsImage}
+                  alt="Couple holding hands"
+                  className="absolute inset-0 w-full h-full object-cover shadow-md"
+                  initial={{ scale: 1.14 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }}
+                />
+                {/* Shimmer sweep */}
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: 'linear-gradient(75deg, transparent 35%, rgba(255,255,255,0.18) 50%, transparent 65%)' }}
+                  initial={{ x: '-120%' }}
+                  whileInView={{ x: '160%' }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1.1, delay: 1.2, ease: 'easeInOut' }}
+                />
+                {/* Bottom gradient + caption */}
+                <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#3d1820]/60 to-transparent pointer-events-none" />
+                <motion.div
+                  className="absolute bottom-5 w-full text-center"
+                  initial={{ opacity: 0, y: 18 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.9, delay: 1.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <p className="font-cursive text-2xl text-white/85 drop-shadow-lg">Pour toujours</p>
+                </motion.div>
+              </motion.div>
+            </div>
           </div>
           </motion.div>
         )}

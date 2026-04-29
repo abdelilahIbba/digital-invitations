@@ -190,12 +190,26 @@ export default function UpdateCrud() {
           </div>
         </section>
 
+        {/* Section: Messages de l'enveloppe */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">✉️ Messages de l'enveloppe</h2>
+          <p className="text-xs text-neutral-500">Ces messages apparaissent en volant hors de l'enveloppe lors de l'ouverture. Dans le 1er message, <code className="bg-neutral-100 px-1 rounded">{'{guest}'}</code> sera automatiquement remplacé par le prénom de l'invité (ou « Invité » si non précisé).</p>
+          <div>
+            <label className="block text-sm font-medium mb-1">Message 1 (salutation)</label>
+            <input type="text" value={data.envelopeMsg1 || ''} onChange={e => handleChange('envelopeMsg1', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="Bonjour {guest} !" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Message 2 (invitation)</label>
+            <input type="text" value={data.envelopeMsg2 || ''} onChange={e => handleChange('envelopeMsg2', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="Rejoignez-nous pour célébrer !" />
+          </div>
+        </section>
+
         {/* Section: Musique */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold border-b pb-2">🎵 Musique</h2>
           <div>
-            <label className="block text-sm font-medium mb-1">URL YouTube / YouTube Music</label>
-            <input type="text" value={data.musicUrl || ''} onChange={e => handleChange('musicUrl', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="https://www.youtube.com/watch?v=..." />
+            <label className="block text-sm font-medium mb-1">URL audio (lien direct MP3/OGG)</label>
+            <input type="text" value={data.musicUrl || ''} onChange={e => handleChange('musicUrl', e.target.value)} className="w-full border rounded px-3 py-2" placeholder="https://example.com/music.mp3" />
           </div>
         </section>
 
